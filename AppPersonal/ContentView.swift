@@ -1,21 +1,19 @@
-//
-//  ContentView.swift
-//  AppPersonal
-//
-//  Created by Bruno Altamirano on 25/05/2026.
-//
-
 import SwiftUI
 
 struct ContentView: View {
     var body: some View {
-        VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Hello, world!")
+        TabView {
+            ActualView()
+                .tabItem { Label("Actual",    systemImage: "thermometer.medium") }
+            GraficasView()
+                .tabItem { Label("Gráficas",  systemImage: "chart.line.uptrend.xyaxis") }
+            CosmosView()
+                .tabItem { Label("Sol·Luna",  systemImage: "moon.stars") }
+            AemetView()
+                .tabItem { Label("AEMET",     systemImage: "cloud.sun") }
+            SettingsView()
+                .tabItem { Label("Ajustes",   systemImage: "gearshape") }
         }
-        .padding()
     }
 }
 
