@@ -20,6 +20,15 @@ struct TokenResponse: Decodable {
     let refreshToken: String?
     let expiresIn: Int?
     let error: String?
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        accessToken  = try c.decodeIfPresent(String.self, forKey: .accessToken)
+        refreshToken = try c.decodeIfPresent(String.self, forKey: .refreshToken)
+        expiresIn    = try c.decodeIfPresent(Int.self,    forKey: .expiresIn)
+        error        = try c.decodeIfPresent(String.self, forKey: .error)
+    }
+
     enum CodingKeys: String, CodingKey {
         case accessToken  = "access_token"
         case refreshToken = "refresh_token"
@@ -33,6 +42,14 @@ struct TokenResponse: Decodable {
 struct StationsDataResponse: Decodable {
     let body: StationsBody?
     let error: NetatmoAPIError?
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        body  = try c.decodeIfPresent(StationsBody.self,    forKey: .body)
+        error = try c.decodeIfPresent(NetatmoAPIError.self, forKey: .error)
+    }
+
+    private enum CodingKeys: String, CodingKey { case body, error }
 }
 
 struct NetatmoAPIError: Decodable {
@@ -88,6 +105,14 @@ struct NetatmoPlace: Decodable {
 struct GetMeasureResponse: Decodable {
     let body: [String: [Double?]]?
     let error: NetatmoAPIError?
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        body  = try c.decodeIfPresent([String: [Double?]].self, forKey: .body)
+        error = try c.decodeIfPresent(NetatmoAPIError.self,     forKey: .error)
+    }
+
+    private enum CodingKeys: String, CodingKey { case body, error }
 }
 
 // MARK: - Public data
@@ -95,6 +120,14 @@ struct GetMeasureResponse: Decodable {
 struct PublicDataResponse: Decodable {
     let body: [PublicStation]?
     let error: NetatmoAPIError?
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        body  = try c.decodeIfPresent([PublicStation].self, forKey: .body)
+        error = try c.decodeIfPresent(NetatmoAPIError.self, forKey: .error)
+    }
+
+    private enum CodingKeys: String, CodingKey { case body, error }
 }
 
 struct PublicStation: Decodable {

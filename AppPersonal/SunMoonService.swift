@@ -112,10 +112,8 @@ struct SunMoonService {
         // Equation of time (minutes)
         let eqT = equationOfTime(T: T, L0: L0, M: M, epsilon: epsilon)
 
-        // Solar noon (fractional day UT) — adjusted for longitude and timezone
-        let tzOffsetMin = Double(tz.secondsFromGMT(for: date)) / 60.0
+        // Solar noon (fractional day UT)
         let solarNoonUT = (720 - 4 * lon - eqT) / 1440.0   // fraction of day in UT
-        let solarNoonLocal = solarNoonUT + tzOffsetMin / 1440.0
 
         // Hour angle for sunrise/sunset (zenith = 90.833° accounts for refraction + solar disc)
         let zenith = 90.833.radians
@@ -285,7 +283,7 @@ struct SunMoonService {
 
     func julianDay(date: Date) -> Double {
         let cal = Calendar(identifier: .gregorian)
-        var comps = cal.dateComponents(in: TimeZone(secondsFromGMT: 0)!, from: date)
+        let comps = cal.dateComponents(in: TimeZone(secondsFromGMT: 0)!, from: date)
         var Y = Double(comps.year!)
         var M = Double(comps.month!)
         let D = Double(comps.day!) + Double(comps.hour ?? 0) / 24.0
