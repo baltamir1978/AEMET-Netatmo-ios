@@ -15,7 +15,7 @@ enum NetatmoError: LocalizedError {
 
 // MARK: - Token
 
-struct TokenResponse: Decodable {
+nonisolated struct TokenResponse: Decodable {
     let accessToken: String?
     let refreshToken: String?
     let expiresIn: Int?
@@ -39,7 +39,7 @@ struct TokenResponse: Decodable {
 
 // MARK: - Stations data
 
-struct StationsDataResponse: Decodable {
+nonisolated struct StationsDataResponse: Decodable {
     let body: StationsBody?
     let error: NetatmoAPIError?
 
@@ -52,16 +52,16 @@ struct StationsDataResponse: Decodable {
     private enum CodingKeys: String, CodingKey { case body, error }
 }
 
-struct NetatmoAPIError: Decodable {
+nonisolated struct NetatmoAPIError: Decodable {
     let code: Int?
     let message: String?
 }
 
-struct StationsBody: Decodable {
+nonisolated struct StationsBody: Decodable {
     let devices: [NetatmoDevice]
 }
 
-struct NetatmoDevice: Decodable {
+nonisolated struct NetatmoDevice: Decodable {
     let id: String
     let stationName: String?
     let reachable: Bool?
@@ -81,7 +81,7 @@ struct NetatmoDevice: Decodable {
     }
 }
 
-struct NetatmoModule: Decodable {
+nonisolated struct NetatmoModule: Decodable {
     let id: String
     let type: String?
     let dashboardData: [String: AnyCodable]?
@@ -95,14 +95,14 @@ struct NetatmoModule: Decodable {
     }
 }
 
-struct NetatmoPlace: Decodable {
+nonisolated struct NetatmoPlace: Decodable {
     let city: String?
     let altitude: Int?
 }
 
 // MARK: - Measure
 
-struct GetMeasureResponse: Decodable {
+nonisolated struct GetMeasureResponse: Decodable {
     let body: [String: [Double?]]?
     let error: NetatmoAPIError?
 
@@ -117,7 +117,7 @@ struct GetMeasureResponse: Decodable {
 
 // MARK: - Public data
 
-struct PublicDataResponse: Decodable {
+nonisolated struct PublicDataResponse: Decodable {
     let body: [PublicStation]?
     let error: NetatmoAPIError?
 
@@ -130,7 +130,7 @@ struct PublicDataResponse: Decodable {
     private enum CodingKeys: String, CodingKey { case body, error }
 }
 
-struct PublicStation: Decodable {
+nonisolated struct PublicStation: Decodable {
     let id: String
     let measures: [String: PublicMeasure]?
     let place: NetatmoPlace?
@@ -142,7 +142,7 @@ struct PublicStation: Decodable {
     }
 }
 
-struct PublicMeasure: Decodable {
+nonisolated struct PublicMeasure: Decodable {
     let windStrength: Int?
     let windAngle: Int?
     let gustStrength: Int?

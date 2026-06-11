@@ -17,10 +17,14 @@ struct AstroEventsService {
     static let shared = AstroEventsService()
     private let tz = TimeZone(identifier: "Europe/Madrid")!
 
-    func nextEvents(from startDate: Date, count: Int = 8) -> [AstroEvent] {
-        let equinoxes  = equinoxesAndSolstices(nearDate: startDate, count: count + 10)
-        let eclipses   = eclipseEvents()
-        var all = (equinoxes + eclipses).filter { $0.datetime >= startDate }
+    func nextEvents(from startDate: Date, count: Int = 10) -> [AstroEvent] {
+        let equinoxes = equinoxesAndSolstices(nearDate: startDate, count: count + 10)
+        let eclipses  = eclipseEvents()
+        let meteors   = meteorShowers(nearDate: startDate)
+        let supers    = supermoons(from: startDate)
+        let planets   = planetaryEvents()
+        var all = (equinoxes + eclipses + meteors + supers + planets)
+            .filter { $0.datetime >= startDate }
         all.sort { $0.datetime < $1.datetime }
         return Array(all.prefix(count))
     }
@@ -129,7 +133,141 @@ struct AstroEventsService {
         }
     }
 
+    // MARK: - Meteor showers (peaks recur on ~fixed dates; generated per year)
+
+    /// Notable annual showers: (name, peak month, peak day, ZHR ≈ meteors/h at peak).
+    private static let showers: [(String, Int, Int, Int)] = [
+        ("Cuadrántidas",     1,  4, 110),
+        ("Líridas",          4, 22,  18),
+        ("Eta Acuáridas",    5,  6,  50),
+        ("Delta Acuáridas",  7, 30,  25),
+        ("Perseidas",        8, 12, 100),
+        ("Oriónidas",       10, 21,  20),
+        ("Leónidas",        11, 17,  15),
+        ("Gemínidas",       12, 14, 120),
+        ("Úrsidas",         12, 22,  10),
+    ]
+
+    private func meteorShowers(nearDate: Date) -> [AstroEvent] {
+        let cal = calMadrid()
+        let year = cal.component(.year, from: nearDate)
+        var events: [AstroEvent] = []
+        for y in (year - 1)...(year + 2) {
+            for (name, month, day, zhr) in Self.showers {
+                // Radiant highest before dawn — use 05:00 local as a representative peak.
+                guard let date = localDate(year: y, month: month, day: day, hour: 5) else { continue }
+                events.append(eventWithDates(
+                    date: date,
+                    label: "Lluvia de \(name)",
+                    emoji: "🌠",
+                    details: "Pico · hasta \(zhr) meteoros/h"))
+            }
+        }
+        return events
+    }
+
+    // MARK: - Supermoons / micromoons (full moon near perigee / apogee)
+
+    private func supermoons(from startDate: Date) -> [AstroEvent] {
+        let fulls = MoonPhasesService.shared.nextPhases(from: startDate, count: 30)
+            .filter { $0.kind == .full }
+        var events: [AstroEvent] = []
+        for f in fulls {
+            let km = moonDistanceKm(date: f.datetime)
+            let kmTxt = "\(Int(km.rounded())) km"
+            if km < 360_000 {
+                events.append(eventWithDates(date: f.datetime, label: "Superluna", emoji: "🌕",
+                                             details: "Luna llena en perigeo · \(kmTxt)"))
+            } else if km > 405_000 {
+                events.append(eventWithDates(date: f.datetime, label: "Microluna", emoji: "🌙",
+                                             details: "Luna llena en apogeo · \(kmTxt)"))
+            }
+        }
+        return events
+    }
+
+    /// Lunar distance in km (Meeus ch. 47, largest Σr terms — good to a few hundred km).
+    private func moonDistanceKm(date: Date) -> Double {
+        let jde = date.timeIntervalSince1970 / 86400 + 2440587.5
+        let T = (jde - 2451545.0) / 36525.0
+        let D  = 297.8501921 + 445267.1114034 * T - 0.0018819 * T*T
+        let M  = 357.5291092 + 35999.0502909  * T - 0.0001536 * T*T
+        let Mp = 134.9633964 + 477198.8675055 * T + 0.0087414 * T*T
+        let F  =  93.2720950 + 483202.0175233 * T - 0.0036539 * T*T
+        let E  = 1 - 0.002516 * T - 0.0000074 * T*T
+        // (D, M, M', F, Σr coefficient)
+        let terms: [(Double, Double, Double, Double, Double)] = [
+            (0, 0, 1, 0, -20905355), (2, 0, -1, 0, -3699111), (2, 0, 0, 0, -2955968),
+            (0, 0, 2, 0,   -569925), (0, 1,  0, 0,    48888), (0, 0, 0, 2,    -3149),
+            (2, 0, -2, 0,   246158), (2, -1, -1, 0, -152138), (2, 0, 1, 0,  -170733),
+            (2, -1, 0, 0,  -204586), (0, 1, -1, 0,  -129620), (1, 0, 0, 0,   108743),
+            (0, 1, 1, 0,    104755), (2, 0, 0, -2,    10321), (4, 0, -1, 0,   79661),
+        ]
+        var sigmaR = 0.0
+        for (a, b, c, d, coef) in terms {
+            let arg = (a * D + b * M + c * Mp + d * F).rad
+            let ePow = pow(E, abs(b))
+            sigmaR += coef * ePow * cos(arg)
+        }
+        return 385000.56 + sigmaR / 1000.0
+    }
+
+    // MARK: - Planetary events (conjunctions, oppositions, greatest elongations)
+    // Tabla CURADA como la de eclipses. Fechas verificadas (jun 2026) con
+    // in-the-sky.org, starwalk.space, lyncean.education y earthsky.org.
+    // Buena hasta ~2027; ampliar más adelante desde esas fuentes.
+
+    private func planetaryEvents() -> [AstroEvent] {
+        let raw: [(String, String, String, String)] = [
+            // (datetime local "YYYY-MM-DDTHH:MM", label, emoji, details)
+            // — Conjunciones y acercamientos —
+            ("2026-06-09T22:00", "Conjunción Venus–Júpiter",   "🪐", "A 1.6° al anochecer · par más brillante de 2026"),
+            ("2026-06-25T05:30", "Conjunción Mercurio–Júpiter", "🪐", "A 3.7° al amanecer"),
+            ("2026-10-06T06:00", "Conjunción Mercurio–Venus",  "🪐", "A 5° al amanecer"),
+            ("2026-11-15T20:00", "Conjunción Marte–Júpiter",   "🪐", "A 1.2° · buena visibilidad"),
+            ("2027-07-01T21:00", "Conjunción Venus–Mercurio",  "🪐", "A 4.6° al anochecer"),
+            ("2027-08-11T20:30", "Conjunción Venus–Mercurio",  "🪐", "A 0.5° · muy juntos, cerca del Sol"),
+            ("2027-10-10T06:00", "Conjunción Venus–Mercurio",  "🪐", "A 4.2° al amanecer"),
+            // — Oposiciones (mejor visibilidad, toda la noche) —
+            ("2026-10-04T00:00", "Saturno en oposición",       "🔭", "Mejor momento del año para verlo"),
+            ("2027-02-11T00:00", "Júpiter en oposición",       "🔭", "Mejor momento del año para verlo"),
+            ("2027-02-19T00:00", "Marte en oposición",         "🔭", "Mejor momento del año para verlo"),
+            ("2027-10-18T00:00", "Saturno en oposición",       "🔭", "Mejor momento del año para verlo"),
+            ("2028-03-12T00:00", "Júpiter en oposición",       "🔭", "Mejor momento del año para verlo"),
+            ("2028-10-30T00:00", "Saturno en oposición",       "🔭", "Mejor momento del año para verlo"),
+            ("2029-03-25T00:00", "Marte en oposición",         "🔭", "Mejor momento del año para verlo"),
+            ("2029-04-12T00:00", "Júpiter en oposición",       "🔭", "Mejor momento del año para verlo"),
+            ("2029-11-13T00:00", "Saturno en oposición",       "🔭", "Mejor momento del año para verlo"),
+            ("2030-05-13T00:00", "Júpiter en oposición",       "🔭", "Mejor momento del año para verlo"),
+            ("2030-11-27T00:00", "Saturno en oposición",       "🔭", "Mejor momento del año para verlo"),
+            // — Máximas elongaciones (mejor momento para Mercurio/Venus) —
+            ("2026-06-15T22:00", "Mercurio en máxima elongación", "🌟", "Visible tras el ocaso"),
+            ("2026-08-15T22:00", "Venus en máxima elongación",    "🌟", "Lucero vespertino al anochecer"),
+            ("2026-10-12T20:30", "Mercurio en máxima elongación", "🌟", "Visible tras el ocaso"),
+            ("2027-01-03T07:00", "Venus en máxima elongación",    "🌟", "Lucero del alba al amanecer"),
+            ("2028-03-22T21:30", "Venus en máxima elongación",    "🌟", "Lucero vespertino al anochecer"),
+        ]
+        let isoFmt = DateFormatter()
+        isoFmt.timeZone = tz
+        isoFmt.dateFormat = "yyyy-MM-dd'T'HH:mm"
+        return raw.compactMap { (dtStr, label, emoji, details) in
+            guard let date = isoFmt.date(from: dtStr) else { return nil }
+            return eventWithDates(date: date, label: label, emoji: emoji, details: details)
+        }
+    }
+
     // MARK: - Helpers
+
+    private func calMadrid() -> Calendar {
+        var c = Calendar(identifier: .gregorian); c.timeZone = tz; return c
+    }
+
+    private func localDate(year: Int, month: Int, day: Int, hour: Int, minute: Int = 0) -> Date? {
+        var comps = DateComponents()
+        comps.year = year; comps.month = month; comps.day = day
+        comps.hour = hour; comps.minute = minute
+        return calMadrid().date(from: comps)
+    }
 
     private func eventWithDates(date: Date, label: String, emoji: String, details: String?) -> AstroEvent {
         let isoFmt = ISO8601DateFormatter()

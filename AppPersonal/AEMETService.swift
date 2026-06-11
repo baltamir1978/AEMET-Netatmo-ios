@@ -4,42 +4,91 @@ import Foundation
 /// Two-step pattern: first call returns a `datos` URL, then fetch that URL.
 struct AEMETService {
     static let shared = AEMETService()
-    private let base = "https://opendata.aemet.es/opendata/api"
+    let base = "https://opendata.aemet.es/opendata/api"
 
     private var apiKey: String { AppConfiguration.shared.aemetApiKey }
 
     // MARK: - Forecast
+    //
+    // AEMET enforces strict request limits, so every endpoint persists its last
+    // good payload to disk. Pass `maxAge` to reuse that cache without hitting the
+    // network when it's still fresh; if a live fetch fails (limit reached / offline)
+    // we fall back to the cached payload instead of throwing, so the UI keeps the
+    // previous measurements until a refresh actually succeeds.
 
-    func forecastDaily(municipio: String) async throws -> AemetDailyRoot {
-        let url = "\(base)/prediccion/especifica/municipio/diaria/\(municipio)"
-        let dataURL = try await fetchDataURL(url)
-        let raw = try await fetchRaw(dataURL)
+    func forecastDaily(municipio: String, maxAge: TimeInterval? = nil) async throws -> AemetDailyRoot {
+        let key = "diaria_\(municipio)"
+        let cached = AemetDiskCache.load(key)
+        if let maxAge, let c = cached, c.age < maxAge, let root = try? Self.decodeDaily(c.data) {
+            return root
+        }
+        do {
+            let dataURL = try await fetchDataURL("\(base)/prediccion/especifica/municipio/diaria/\(municipio)")
+            let raw = try await fetchRaw(dataURL)
+            let root = try Self.decodeDaily(raw)
+            AemetDiskCache.save(key, data: raw)
+            return root
+        } catch {
+            if let c = cached, let root = try? Self.decodeDaily(c.data) { return root }
+            throw error
+        }
+    }
+
+    func forecastHourly(municipio: String, maxAge: TimeInterval? = nil) async throws -> AemetHourlyRoot {
+        let key = "horaria_\(municipio)"
+        let cached = AemetDiskCache.load(key)
+        if let maxAge, let c = cached, c.age < maxAge, let root = try? Self.decodeHourly(c.data) {
+            return root
+        }
+        do {
+            let dataURL = try await fetchDataURL("\(base)/prediccion/especifica/municipio/horaria/\(municipio)")
+            let raw = try await fetchRaw(dataURL)
+            let root = try Self.decodeHourly(raw)
+            AemetDiskCache.save(key, data: raw)
+            return root
+        } catch {
+            if let c = cached, let root = try? Self.decodeHourly(c.data) { return root }
+            throw error
+        }
+    }
+
+    func observation(idema: String, maxAge: TimeInterval? = nil) async throws -> [AemetObservationRecord] {
+        let key = "obs_\(idema)"
+        let cached = AemetDiskCache.load(key)
+        if let maxAge, let c = cached, c.age < maxAge,
+           let recs = try? JSONDecoder().decode([AemetObservationRecord].self, from: c.data) {
+            return recs
+        }
+        do {
+            let dataURL = try await fetchDataURL("\(base)/observacion/convencional/datos/estacion/\(idema)")
+            let raw = try await fetchRaw(dataURL)
+            let recs = try JSONDecoder().decode([AemetObservationRecord].self, from: raw)
+            AemetDiskCache.save(key, data: raw)
+            return recs
+        } catch {
+            if let c = cached,
+               let recs = try? JSONDecoder().decode([AemetObservationRecord].self, from: c.data) { return recs }
+            throw error
+        }
+    }
+
+    // AEMET returns an array; fall back to a single object for some edge cases.
+    private static func decodeDaily(_ data: Data) throws -> AemetDailyRoot {
         let dec = JSONDecoder()
-        // AEMET returns an array; fall back to single object for some edge cases
-        if let arr = try? dec.decode([AemetDailyRoot].self, from: raw), let first = arr.first { return first }
-        if let single = try? dec.decode(AemetDailyRoot.self, from: raw) { return single }
-        // If both fail, decode array again to surface the real error
-        let arr = try dec.decode([AemetDailyRoot].self, from: raw)
+        if let arr = try? dec.decode([AemetDailyRoot].self, from: data), let first = arr.first { return first }
+        if let single = try? dec.decode(AemetDailyRoot.self, from: data) { return single }
+        let arr = try dec.decode([AemetDailyRoot].self, from: data)   // re-decode to surface the real error
         guard let first = arr.first else { throw AEMETError.noData("Predicción diaria sin datos") }
         return first
     }
 
-    func forecastHourly(municipio: String) async throws -> AemetHourlyRoot {
-        let url = "\(base)/prediccion/especifica/municipio/horaria/\(municipio)"
-        let dataURL = try await fetchDataURL(url)
-        let raw = try await fetchRaw(dataURL)
+    private static func decodeHourly(_ data: Data) throws -> AemetHourlyRoot {
         let dec = JSONDecoder()
-        if let arr = try? dec.decode([AemetHourlyRoot].self, from: raw), let first = arr.first { return first }
-        if let single = try? dec.decode(AemetHourlyRoot.self, from: raw) { return single }
-        let arr = try dec.decode([AemetHourlyRoot].self, from: raw)
+        if let arr = try? dec.decode([AemetHourlyRoot].self, from: data), let first = arr.first { return first }
+        if let single = try? dec.decode(AemetHourlyRoot.self, from: data) { return single }
+        let arr = try dec.decode([AemetHourlyRoot].self, from: data)
         guard let first = arr.first else { throw AEMETError.noData("Predicción horaria sin datos") }
         return first
-    }
-
-    func observation(idema: String) async throws -> [AemetObservationRecord] {
-        let url = "\(base)/observacion/convencional/datos/estacion/\(idema)"
-        let dataURL = try await fetchDataURL(url)
-        return try await fetchJSON(dataURL)
     }
 
     // MARK: - Municipality catalog
@@ -58,17 +107,38 @@ struct AEMETService {
 
     // MARK: - Private helpers
 
-    private func fetchDataURL(_ path: String) async throws -> URL {
+    func fetchDataURL(_ path: String) async throws -> URL {
         guard !apiKey.isEmpty else { throw AEMETError.notConfigured }
         var comps = URLComponents(string: path)!
         comps.queryItems = (comps.queryItems ?? []) + [URLQueryItem(name: "api_key", value: apiKey)]
-        let (data, resp) = try await URLSession.shared.data(from: comps.url!)
-        if let http = resp as? HTTPURLResponse, http.statusCode == 429 { throw AEMETError.rateLimited }
-        let envelope = try JSONDecoder().decode(AEMETEnvelope.self, from: data)
-        guard let urlStr = envelope.datos, let url = URL(string: urlStr) else {
-            throw AEMETError.noData(envelope.descripcion ?? "Sin datos")
+        let url = comps.url!
+
+        // AEMET enforces a per-minute limit and answers a burst with 429 — sometimes
+        // as the HTTP status, sometimes as `estado: 429` in the envelope body. Both
+        // clear within a few seconds, so retry with backoff before surfacing the error
+        // (a fresh install has no disk cache to fall back on).
+        let backoff: [TimeInterval] = [0, 2.5, 5]
+        var lastError: Error = AEMETError.rateLimited
+        for delay in backoff {
+            if delay > 0 { try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000)) }
+            // Space every keyed call so a multi-city / multi-endpoint refresh never bursts.
+            await AEMETThrottle.shared.wait()
+            let (data, resp) = try await URLSession.shared.data(from: url)
+            if let http = resp as? HTTPURLResponse, http.statusCode == 429 {
+                lastError = AEMETError.rateLimited
+                continue
+            }
+            let envelope = try JSONDecoder().decode(AEMETEnvelope.self, from: data)
+            if envelope.estado == 429 {
+                lastError = AEMETError.rateLimited
+                continue
+            }
+            guard let urlStr = envelope.datos, let dataURL = URL(string: urlStr) else {
+                throw AEMETError.noData(envelope.descripcion ?? "Sin datos")
+            }
+            return dataURL
         }
-        return url
+        throw lastError
     }
 
     private func fetchRaw(_ url: URL) async throws -> Data {
@@ -84,6 +154,64 @@ struct AEMETService {
     private func fetchJSON<T: Decodable>(_ url: URL) async throws -> T {
         let data = try await fetchRaw(url)
         return try JSONDecoder().decode(T.self, from: data)
+    }
+}
+
+// MARK: - Request throttle
+
+/// Serialises AEMET's keyed requests so bursts (parallel endpoints, multi-city
+/// widget refresh) stay under the per-minute limit. Each caller reserves the next
+/// time slot before suspending, so concurrent callers space out predictably.
+actor AEMETThrottle {
+    static let shared = AEMETThrottle()
+    private var lastSlot = Date.distantPast
+    private let minInterval: TimeInterval = 1.2
+
+    func wait() async {
+        let now = Date()
+        let slot = max(now, lastSlot.addingTimeInterval(minInterval))
+        lastSlot = slot                                   // reserve before awaiting
+        let delay = slot.timeIntervalSince(now)
+        if delay > 0 {
+            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+        }
+    }
+}
+
+// MARK: - Disk cache
+
+/// Persists each AEMET endpoint's last good payload to Application Support so the
+/// app can throttle requests and survive launches without re-hitting the API.
+enum AemetDiskCache {
+    private static let folder = "AemetCache"
+
+    private static func directory() -> URL? {
+        let fm = FileManager.default
+        guard let base = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return nil }
+        let url = base.appendingPathComponent(folder, isDirectory: true)
+        if !fm.fileExists(atPath: url.path) {
+            try? fm.createDirectory(at: url, withIntermediateDirectories: true)
+        }
+        return url
+    }
+
+    private static func fileURL(_ key: String) -> URL? {
+        let safe = key.replacingOccurrences(of: "/", with: "_")
+        return directory()?.appendingPathComponent("\(safe).json")
+    }
+
+    /// Cached payload plus its age in seconds, or nil when absent.
+    static func load(_ key: String) -> (data: Data, age: TimeInterval)? {
+        guard let url = fileURL(key),
+              let data = try? Data(contentsOf: url),
+              let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),
+              let modified = attrs[.modificationDate] as? Date else { return nil }
+        return (data, Date().timeIntervalSince(modified))
+    }
+
+    static func save(_ key: String, data: Data) {
+        guard let url = fileURL(key) else { return }
+        try? data.write(to: url, options: .atomic)
     }
 }
 
@@ -250,16 +378,26 @@ struct AemetObservationRecord: Decodable {
 
 struct AemetMunicipio: Decodable, Identifiable {
     var id: String { codMunicipio }
+    /// Bare forecast code, e.g. "28079" (AEMET's maestro reports it as "id28079").
     let codMunicipio: String
     let nombre: String
-    let codProv: String?
-    let nombreProv: String?
+    let lat: Double?
+    let lon: Double?
 
     enum CodingKeys: String, CodingKey {
-        case codMunicipio = "id"
+        case id
         case nombre
-        case codProv
-        case nombreProv
+        case latitudDec = "latitud_dec"
+        case longitudDec = "longitud_dec"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let rawId = try c.decode(String.self, forKey: .id)
+        codMunicipio = rawId.hasPrefix("id") ? String(rawId.dropFirst(2)) : rawId
+        nombre = try c.decode(String.self, forKey: .nombre)
+        lat = (try? c.decode(String.self, forKey: .latitudDec)).flatMap(Double.init)
+        lon = (try? c.decode(String.self, forKey: .longitudDec)).flatMap(Double.init)
     }
 }
 

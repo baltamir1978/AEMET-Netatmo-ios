@@ -26,6 +26,11 @@ struct GraficasView: View {
     @State private var loadingExt = false
     @State private var loadingInt = false
     @State private var configError = false
+    @Environment(\.verticalSizeClass) private var vSize
+
+    /// Landscape on iPhone reports a compact height.
+    private var isLandscape: Bool { vSize == .compact }
+    private var chartHeight: CGFloat { isLandscape ? 240 : 200 }
 
     private let periods = [("semana", "Semana"), ("mes", "Mes"), ("meses3", "3 Meses"), ("anio", "Año")]
 
@@ -46,57 +51,90 @@ struct GraficasView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 20) {
+                VStack(spacing: isLandscape ? 12 : 20) {
                     if configError {
                         Label("Configura Netatmo en Ajustes", systemImage: "gearshape")
                             .font(.caption).foregroundStyle(.secondary).padding()
                     }
                     periodSelector
-                    ChartCard(
-                        title: "Exterior",
-                        typeOptions: exteriorTypes.map { ($0.0, $0.2) },
-                        selectedType: $exteriorType,
-                        chartData: exteriorChart,
-                        isLoading: loadingExt,
-                        onTypeChange: { loadExterior() }
-                    )
-                    ChartCard(
-                        title: "Interior",
-                        typeOptions: interiorTypes.map { ($0.0, $0.2) },
-                        selectedType: $interiorType,
-                        chartData: interiorChart,
-                        isLoading: loadingInt,
-                        onTypeChange: { loadInterior() }
-                    )
+                    if isLandscape {
+                        HStack(alignment: .top, spacing: 16) {
+                            exteriorCard.frame(maxWidth: .infinity)
+                            interiorCard.frame(maxWidth: .infinity)
+                        }
+                    } else {
+                        exteriorCard
+                        interiorCard
+                    }
                 }
-                .padding()
+                .padding(.horizontal)
+                .padding(.vertical, isLandscape ? 8 : 16)
             }
             .navigationTitle("Gráficas")
+            // The bottom tab already says "Gráficas" — hide the bulky title bar in landscape.
+            .navigationBarTitleDisplayMode(isLandscape ? .inline : .large)
+            .toolbar(isLandscape ? .hidden : .automatic, for: .navigationBar)
             .task { loadBoth() }
         }
     }
 
+    private var exteriorCard: some View {
+        ChartCard(
+            title: "Exterior",
+            typeOptions: exteriorTypes.map { ($0.0, $0.2) },
+            selectedType: $exteriorType,
+            chartData: exteriorChart,
+            isLoading: loadingExt,
+            chartHeight: chartHeight,
+            onTypeChange: { loadExterior() }
+        )
+    }
+
+    private var interiorCard: some View {
+        ChartCard(
+            title: "Interior",
+            typeOptions: interiorTypes.map { ($0.0, $0.2) },
+            selectedType: $interiorType,
+            chartData: interiorChart,
+            isLoading: loadingInt,
+            chartHeight: chartHeight,
+            onTypeChange: { loadInterior() }
+        )
+    }
+
+    @ViewBuilder
     private var periodSelector: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Periodo")
-                .font(.caption).fontWeight(.bold).textCase(.uppercase)
-                .foregroundStyle(.secondary).tracking(1.5)
-            HStack(spacing: 6) {
+        if isLandscape {
+            // Compact full-width segmented control to reclaim vertical space.
+            Picker("Periodo", selection: $period) {
                 ForEach(periods, id: \.0) { (key, label) in
-                    Button(label) {
-                        period = key
-                        loadBoth()
-                    }
-                    .font(.subheadline).fontWeight(.medium)
-                    .padding(.horizontal, 14).padding(.vertical, 7)
-                    .background(period == key ? Color.blue : Color(.systemBackground))
-                    .foregroundStyle(period == key ? .white : .secondary)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(.systemGray4)))
+                    Text(label).tag(key)
                 }
             }
+            .pickerStyle(.segmented)
+            .onChange(of: period) { _, _ in loadBoth() }
+        } else {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Periodo")
+                    .font(.caption).fontWeight(.bold).textCase(.uppercase)
+                    .foregroundStyle(.secondary).tracking(1.5)
+                HStack(spacing: 6) {
+                    ForEach(periods, id: \.0) { (key, label) in
+                        Button(label) {
+                            period = key
+                            loadBoth()
+                        }
+                        .font(.subheadline).fontWeight(.medium)
+                        .padding(.horizontal, 14).padding(.vertical, 7)
+                        .background(period == key ? AppTheme.green : Color(.systemBackground))
+                        .foregroundStyle(period == key ? .white : .secondary)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(.systemGray4)))
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: - Loading
@@ -117,7 +155,9 @@ struct GraficasView: View {
         let isRain = exteriorType == "Rain"
         let moduleId = isRain ? cfg.moduleRain : cfg.moduleExterior
         let (scale, days) = scaleAndDays(period)
-        let measureType = isRain ? rainMeasureType(period) : exteriorType
+        // `getmeasure` only accepts `sum_rain` for the rain gauge; `Sum_rain_1/24`
+        // are dashboard_data fields and return an empty body here.
+        let measureType = isRain ? "sum_rain" : exteriorType
         let dateBegin = dateBeginUnix(days: days)
 
         loadingExt = true
@@ -169,10 +209,6 @@ struct GraficasView: View {
         case "anio":   return ("1week", 365)
         default:       return ("3hours",  7)
         }
-    }
-
-    private func rainMeasureType(_ period: String) -> String {
-        period == "semana" ? "Sum_rain_1" : "Sum_rain_24"
     }
 
     private func dateBeginUnix(days: Int) -> Int {
@@ -233,17 +269,18 @@ struct ChartCard: View {
     @Binding var selectedType: String
     let chartData: ChartData?
     let isLoading: Bool
+    var chartHeight: CGFloat = 200
     let onTypeChange: () -> Void
 
     private var typeColor: Color {
         switch selectedType {
         case "Temperature": return .orange
         case "Humidity":    return .blue
-        case "Pressure":    return .green
+        case "Pressure":    return AppTheme.green
         case "CO2":         return .purple
         case "Noise":       return .gray
         case "Rain":        return .indigo
-        default:            return .blue
+        default:            return AppTheme.green
         }
     }
 
@@ -277,13 +314,13 @@ struct ChartCard: View {
             .padding(.horizontal, 16).padding(.vertical, 12)
             Divider()
             if isLoading {
-                ProgressView().frame(height: 200)
+                ProgressView().frame(height: chartHeight)
             } else if let data = chartData {
                 chartBody(data: data)
                 Divider()
                 statsRow(data: data)
             } else {
-                Text("Sin datos").foregroundStyle(.secondary).frame(height: 200)
+                Text("Sin datos").foregroundStyle(.secondary).frame(height: chartHeight)
             }
         }
         .background(.background)
@@ -313,7 +350,7 @@ struct ChartCard: View {
                     }
                 }
             }
-            .frame(height: 200)
+            .frame(height: chartHeight)
             .padding(.horizontal, 16).padding(.vertical, 12)
         } else {
             Chart {
@@ -333,7 +370,7 @@ struct ChartCard: View {
                     }
                 }
             }
-            .frame(height: 200)
+            .frame(height: chartHeight)
             .padding(.horizontal, 16).padding(.vertical, 12)
         }
     }

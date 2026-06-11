@@ -24,12 +24,6 @@ struct SunMoonLocation: Identifiable {
     let tz: String
 }
 
-let sunMoonLocations: [SunMoonLocation] = [
-    SunMoonLocation(key: "lagranja", name: "La Granja",  lat: 40.9000, lon: -4.0167, elevation: 1191, tz: "Europe/Madrid"),
-    SunMoonLocation(key: "madrid",   name: "Madrid",     lat: 40.4168, lon: -3.7038, elevation: 667,  tz: "Europe/Madrid"),
-    SunMoonLocation(key: "llanes",   name: "Llanes",     lat: 43.4214, lon: -4.7546, elevation: 5,    tz: "Europe/Madrid"),
-]
-
 // MARK: - Service
 
 struct SunMoonService {
@@ -176,7 +170,8 @@ struct SunMoonService {
         var phase = daysSinceRef.truncatingRemainder(dividingBy: synodicMonth)
         if phase < 0 { phase += synodicMonth }
 
-        let illumination = round(50 * (1 - cos(2 * .pi * phase / synodicMonth)) / 2 * 10) / 10
+        // Illuminated fraction of the disc, 0…1 (consumers multiply by 100 for %).
+        let illumination = (1 - cos(2 * .pi * phase / synodicMonth)) / 2
 
         let (phaseName, phaseEmoji) = moonPhaseName(phase)
 

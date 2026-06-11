@@ -6,11 +6,9 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
+                aemetSection
                 netatmoSection
                 stationSection
-                windSection
-                favoritesSection
-                aemetSection
                 helpSection
             }
             .navigationTitle("Ajustes")
@@ -46,49 +44,55 @@ struct SettingsView: View {
 
     private var stationSection: some View {
         Section {
-            settingRow("Device ID (interior)", binding: $cfg.deviceId)
-            settingRow("Module Exterior",       binding: $cfg.moduleExterior)
-            settingRow("Module Lluvia",          binding: $cfg.moduleRain)
-            settingRow("Descripción ubicación",  binding: $cfg.stationLocation)
+            if cfg.deviceId.isEmpty {
+                Label(cfg.isDetectingStation ? "Detectando estación…" : "Sin estación detectada",
+                      systemImage: cfg.isDetectingStation ? "antenna.radiowaves.left.and.right" : "exclamationmark.triangle")
+                    .foregroundStyle(.secondary)
+            } else {
+                // Picker only appears when the account exposes more than one station.
+                if cfg.availableStations.count > 1 {
+                    Picker("Estación", selection: stationSelection) {
+                        ForEach(cfg.availableStations) { station in
+                            Text(station.name).tag(station.id)
+                        }
+                    }
+                } else {
+                    LabeledContent("Estación", value: cfg.stationLocation)
+                }
+                moduleStatus("Módulo exterior", present: !cfg.moduleExterior.isEmpty)
+                moduleStatus("Módulo lluvia",   present: !cfg.moduleRain.isEmpty)
+            }
+            Button {
+                Task { await cfg.autoDetectStation() }
+            } label: {
+                Label("Detectar de nuevo", systemImage: "arrow.clockwise")
+            }
+            .disabled(cfg.isDetectingStation || !cfg.hasNetatmoCredentials)
         } header: {
             Text("Estación principal")
         } footer: {
-            Text("Los IDs tienen formato 70:ee:50:xx:xx:xx. Se ven en la app Netatmo o en getstationsdata.")
+            Text("Los módulos se detectan automáticamente desde tu cuenta Netatmo. No hace falta introducirlos a mano.")
         }
     }
 
-    // MARK: - Wind public station
-
-    private var windSection: some View {
-        Section {
-            settingRow("Station ID (viento)", binding: $cfg.windStationId)
-            settingRow("Ubicación (texto)",    binding: $cfg.windStationLoc)
-            settingRow("BBox NE Lat",          binding: $cfg.windBboxNELat)
-            settingRow("BBox NE Lon",          binding: $cfg.windBboxNELon)
-            settingRow("BBox SW Lat",          binding: $cfg.windBboxSWLat)
-            settingRow("BBox SW Lon",          binding: $cfg.windBboxSWLon)
-        } header: {
-            Text("Estación pública (viento) — Opcional")
-        } footer: {
-            Text("Caja de coordenadas del área donde buscar la estación pública con anemómetro.")
-        }
-    }
-
-    // MARK: - Favorites
-
-    private var favoritesSection: some View {
-        Section {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Favoritas").font(.caption).foregroundStyle(.secondary)
-                TextField("Madrid:Madrid,Llanes:Naves", text: $cfg.favoriteNames, axis: .vertical)
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
-                    .lineLimit(3, reservesSpace: true)
+    /// Drives the station Picker: reads the active device id, applies the picked one.
+    private var stationSelection: Binding<String> {
+        Binding(
+            get: { cfg.deviceId },
+            set: { id in
+                if let station = cfg.availableStations.first(where: { $0.id == id }) {
+                    cfg.applyStation(station)
+                }
             }
-        } header: {
-            Text("Estaciones favoritas")
-        } footer: {
-            Text("Formato: ciudad:Nombre,ciudad2:Nombre2\nLa ciudad debe coincidir con el campo city de Netatmo (sin acentos).")
+        )
+    }
+
+    private func moduleStatus(_ label: String, present: Bool) -> some View {
+        HStack {
+            Text(label)
+            Spacer()
+            Image(systemName: present ? "checkmark.circle.fill" : "xmark.circle")
+                .foregroundStyle(present ? .green : .gray)
         }
     }
 
@@ -127,17 +131,6 @@ struct SettingsView: View {
                 Text(AppConfiguration.shared.isAemetConfigured ? "✓" : "Pendiente")
                     .foregroundStyle(.secondary).font(.caption)
             }
-        }
-    }
-
-    // MARK: - Helper
-
-    private func settingRow(_ label: String, binding: Binding<String>) -> some View {
-        LabeledContent(label) {
-            TextField("", text: binding)
-                .multilineTextAlignment(.trailing)
-                .autocorrectionDisabled()
-                .textInputAutocapitalization(.never)
         }
     }
 }

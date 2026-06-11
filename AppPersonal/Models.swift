@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - Flexible JSON decoder for Netatmo dashboardData
 
-struct AnyCodable: Decodable {
+nonisolated struct AnyCodable: Decodable {
     let value: Any?
 
     init(from decoder: Decoder) throws {
@@ -27,33 +27,3 @@ func windDirection(_ angle: Int?) -> String {
     return dirs[Int((Double(angle) / 22.5).rounded()) % 16]
 }
 
-// MARK: - Tide (used by TidesService + CosmosView)
-
-struct Tide: Identifiable {
-    var id: String { time + type }
-    let time: String
-    let height: Double
-    let type: String
-}
-
-// MARK: - AEMET preset locations
-
-struct AemetLocation: Identifiable {
-    var id: String { key }
-    let key: String
-    let name: String
-    let idemaName: String
-    let idema: String
-}
-
-let aemetPresetLocations: [AemetLocation] = [
-    AemetLocation(key: "madrid",   name: "Madrid · Fuencarral-El Pardo", idemaName: "El Goloso", idema: "3126Y"),
-    AemetLocation(key: "lagranja", name: "La Granja",                    idemaName: "Segovia",   idema: "2465"),
-    AemetLocation(key: "llanes",   name: "Posada de Llanes",             idemaName: "Llanes",    idema: "1183X"),
-]
-
-let aemetPresetMunicipios: [String: String] = [
-    "madrid":   "28079",
-    "lagranja": "40181",
-    "llanes":   "33036",
-]

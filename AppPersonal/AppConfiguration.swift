@@ -18,48 +18,77 @@ class AppConfiguration: ObservableObject {
     @Published var moduleRain: String           { didSet { ud.set(moduleRain,           forKey: "module_rain") } }
     @Published var stationLocation: String      { didSet { ud.set(stationLocation,      forKey: "station_location") } }
 
-    // MARK: - Wind public station (optional)
-    @Published var windStationId: String        { didSet { ud.set(windStationId,        forKey: "wind_station_id") } }
-    @Published var windStationLoc: String       { didSet { ud.set(windStationLoc,       forKey: "wind_station_loc") } }
-    @Published var windBboxNELat: String        { didSet { ud.set(windBboxNELat,        forKey: "wind_bbox_ne_lat") } }
-    @Published var windBboxNELon: String        { didSet { ud.set(windBboxNELon,        forKey: "wind_bbox_ne_lon") } }
-    @Published var windBboxSWLat: String        { didSet { ud.set(windBboxSWLat,        forKey: "wind_bbox_sw_lat") } }
-    @Published var windBboxSWLon: String        { didSet { ud.set(windBboxSWLon,        forKey: "wind_bbox_sw_lon") } }
-
     // MARK: - AEMET
     @Published var aemetApiKey: String          { didSet { ud.set(aemetApiKey,          forKey: "aemet_api_key") } }
+
+    /// True while `autoDetectStation()` is fetching modules from Netatmo.
+    @Published var isDetectingStation = false
+    /// Stations found in the account on the last detection (for the picker).
+    @Published var availableStations: [DetectedStation] = []
+
+    /// A Netatmo station discovered via `getStationsData`, ready to apply.
+    struct DetectedStation: Identifiable, Hashable {
+        let id: String          // main device id
+        let name: String        // human-readable location / station name
+        let moduleExterior: String
+        let moduleRain: String
+    }
 
     // MARK: - Computed
     var isNetatmoConfigured: Bool {
         !deviceId.isEmpty && !netatmoClientId.isEmpty && !netatmoRefreshToken.isEmpty
     }
+    /// Credentials are enough to talk to Netatmo (modules can be auto-detected).
+    var hasNetatmoCredentials: Bool {
+        !netatmoClientId.isEmpty && !netatmoClientSecret.isEmpty && !netatmoRefreshToken.isEmpty
+    }
     var isAemetConfigured: Bool { !aemetApiKey.isEmpty }
-    var windEnabled: Bool { !windStationId.isEmpty }
 
-    var windBbox: (neLat: Double, neLon: Double, swLat: Double, swLon: Double)? {
-        guard let a = Double(windBboxNELat), let b = Double(windBboxNELon),
-              let c = Double(windBboxSWLat), let d = Double(windBboxSWLon) else { return nil }
-        return (a, b, c, d)
+    // MARK: - Auto-detection
+
+    /// Fills the station device + module IDs from the user's Netatmo account.
+    /// Only the OAuth credentials are required; the IDs no longer need manual entry.
+    @MainActor
+    func autoDetectStation() async {
+        guard hasNetatmoCredentials, !isDetectingStation else { return }
+        isDetectingStation = true
+        defer { isDetectingStation = false }
+        do {
+            let resp = try await NetatmoService.shared.getStationsData()
+            let stations = (resp.body?.devices ?? []).map(Self.makeStation)
+            availableStations = stations
+            // Keep the user's current station if it still exists, else default to the first.
+            if let chosen = stations.first(where: { $0.id == deviceId }) ?? stations.first {
+                applyStation(chosen)
+            }
+        } catch {}
     }
 
-    // MARK: - Favorite stations: "city:FriendlyName,city2:Name2"
-    @Published var favoriteNames: String        { didSet { ud.set(favoriteNames,        forKey: "favorite_names") } }
+    /// Switch the active station to one returned by the last detection.
+    @MainActor
+    func applyStation(_ station: DetectedStation) {
+        deviceId        = station.id
+        moduleExterior  = station.moduleExterior
+        moduleRain      = station.moduleRain
+        stationLocation = station.name
+    }
 
-    /// Parsed favorites map: lowercased city → display name
-    var favoriteCityNames: [String: String] {
-        var map: [String: String] = [:]
-        for raw in favoriteNames.split(separator: ",") {
-            let trimmed = raw.trimmingCharacters(in: .whitespaces)
-            if trimmed.isEmpty { continue }
-            if let colon = trimmed.firstIndex(of: ":") {
-                let city = String(trimmed[..<colon]).trimmingCharacters(in: .whitespaces).lowercased()
-                let name = String(trimmed[trimmed.index(after: colon)...]).trimmingCharacters(in: .whitespaces)
-                map[city] = name
-            } else {
-                map[trimmed.lowercased()] = trimmed
+    private static func makeStation(from device: NetatmoDevice) -> DetectedStation {
+        var exterior = "", rain = ""
+        for module in device.modules ?? [] {
+            switch module.type {
+            case "NAModule1": exterior = module.id   // outdoor temp/humidity
+            case "NAModule3": rain = module.id        // rain gauge
+            default: break
             }
         }
-        return map
+        let name: String
+        if let place = device.place, let city = place.city {
+            name = place.altitude.map { "\(city) · \($0) m" } ?? city
+        } else {
+            name = device.stationName ?? device.id
+        }
+        return DetectedStation(id: device.id, name: name, moduleExterior: exterior, moduleRain: rain)
     }
 
     private let ud = UserDefaults.standard
@@ -73,14 +102,7 @@ class AppConfiguration: ObservableObject {
         static let moduleExt     = Secrets.netatmoModuleExt
         static let moduleRain    = Secrets.netatmoModuleRain
         static let stationLoc    = "La Granja de San Ildefonso · 1191 m"
-        static let windId        = Secrets.netatmoWindId
-        static let windLoc       = "Palazuelos de Eresma · 6 km"
-        static let windNELat     = "40.88"
-        static let windNELon     = "-3.98"
-        static let windSWLat     = "40.82"
-        static let windSWLon     = "-4.12"
         static let aemetKey      = Secrets.aemetApiKey
-        static let favorites     = "Madrid:Madrid,Llanes:Nueva"
     }
 
     private init() {
@@ -93,13 +115,6 @@ class AppConfiguration: ObservableObject {
         moduleExterior      = get("module_exterior",       Defaults.moduleExt)
         moduleRain          = get("module_rain",           Defaults.moduleRain)
         stationLocation     = get("station_location",      Defaults.stationLoc)
-        windStationId       = get("wind_station_id",       Defaults.windId)
-        windStationLoc      = get("wind_station_loc",      Defaults.windLoc)
-        windBboxNELat       = get("wind_bbox_ne_lat",      Defaults.windNELat)
-        windBboxNELon       = get("wind_bbox_ne_lon",      Defaults.windNELon)
-        windBboxSWLat       = get("wind_bbox_sw_lat",      Defaults.windSWLat)
-        windBboxSWLon       = get("wind_bbox_sw_lon",      Defaults.windSWLon)
         aemetApiKey         = get("aemet_api_key",         Defaults.aemetKey)
-        favoriteNames       = get("favorite_names",        Defaults.favorites)
     }
 }
