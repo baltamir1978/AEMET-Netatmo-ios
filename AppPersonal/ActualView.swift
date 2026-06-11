@@ -251,6 +251,8 @@ struct MetricCard: View {
         .padding(.vertical, 11).padding(.horizontal, 10)
         .background(.background)
         .clipShape(RoundedRectangle(cornerRadius: 14))
+        .overlay(RoundedRectangle(cornerRadius: 14)
+            .strokeBorder(AppTheme.green.opacity(0.18), lineWidth: 1))
         .shadow(color: .black.opacity(0.05), radius: 4, y: 2)
     }
 }

@@ -27,6 +27,9 @@ struct CosmosView: View {
         return f.string(from: selectedDate)
     }
 
+    /// The day the Sun·Moon card reflects: a tapped calendar day if any, else the picker date.
+    private var activeDay: Date { selectedMoonDay ?? selectedDate }
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -86,6 +89,15 @@ struct CosmosView: View {
 
     private func sunMoonCard(_ data: SunMoonResult) -> some View {
         VStack(spacing: 0) {
+            // Date this card reflects (follows the picker or a tapped calendar day).
+            HStack(spacing: 6) {
+                Image(systemName: "calendar").font(.caption2).foregroundStyle(AppTheme.green)
+                Text(formatEventDate(activeDay))
+                    .font(.caption).fontWeight(.semibold).foregroundStyle(.secondary)
+                Spacer()
+            }
+            .padding(.horizontal, 16).padding(.top, 10).padding(.bottom, 6)
+            Divider()
             // Sun row: 4 columns
             HStack(spacing: 0) {
                 sunCell("🌅", data.sun.sunrise  ?? "—", "Amanecer")
@@ -266,8 +278,10 @@ struct CosmosView: View {
                     lineWidth: isSelected ? 1.5 : 1))
         .contentShape(Rectangle())
         .onTapGesture {
-            guard hasEvent else { return }
+            // Tapping any day re-points the Sun·Moon card to it; days with events also
+            // toggle the detail panel below.
             selectedMoonDay = isSelected ? nil : day
+            loadSunMoon()
         }
     }
 
@@ -413,9 +427,11 @@ struct CosmosView: View {
     private func loadAll() async {
         isLoading = true
         if store.selectedCode == SavedLocation.currentCode { _ = await store.resolveCurrent() }
-        loadSunMoon()
+        // Phases/events first: loadMoonPhases clears selectedMoonDay so the Sun·Moon card
+        // below resolves to the picker date, not a stale tapped day.
         loadMoonPhases()
         loadAstroEvents()
+        loadSunMoon()
         await loadTides()
         isLoading = false
     }
@@ -426,7 +442,7 @@ struct CosmosView: View {
     }
 
     private func loadSunMoon() {
-        sunMoon = SunMoonService.shared.calculate(location: store.selected.sunMoon, date: selectedDate)
+        sunMoon = SunMoonService.shared.calculate(location: store.selected.sunMoon, date: activeDay)
     }
 
     private func loadMoonPhases() {
@@ -446,7 +462,25 @@ struct CosmosView: View {
     private func loadAstroEvents() {
         // One year ahead of astronomical events (~20-30/year; count is a safe cap).
         let horizon = Calendar.current.date(byAdding: .year, value: 1, to: selectedDate) ?? selectedDate
-        astroEvents = AstroEventsService.shared.nextEvents(from: selectedDate, count: 60)
-            .filter { $0.datetime <= horizon }
+        var events = AstroEventsService.shared.nextEvents(from: selectedDate, count: 60)
+        // Solar turning points (earliest/latest sunrise & sunset) for the selected place.
+        events += SunMoonService.shared
+            .solarTurningPoints(location: store.selected.sunMoon, from: selectedDate, years: 1)
+            .map { tp in
+                AstroEvent(label: tp.kind.label, emoji: tp.kind.emoji,
+                           details: "\(tp.kind.note) · \(hhmmLocal(tp.time))",
+                           datetime: tp.time, date: isoDay(tp.day), timeLocal: hhmmLocal(tp.time))
+            }
+        astroEvents = events.filter { $0.datetime <= horizon }.sorted { $0.datetime < $1.datetime }
+    }
+
+    private func hhmmLocal(_ date: Date) -> String {
+        let f = DateFormatter(); f.locale = Locale(identifier: "es_ES"); f.dateFormat = "HH:mm"
+        return f.string(from: date)
+    }
+
+    private func isoDay(_ date: Date) -> String {
+        let f = ISO8601DateFormatter(); f.formatOptions = [.withFullDate]
+        return f.string(from: date)
     }
 }

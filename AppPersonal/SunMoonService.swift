@@ -24,6 +24,44 @@ struct SunMoonLocation: Identifiable {
     let tz: String
 }
 
+// MARK: - Solar turning points
+
+/// The yearly sunrise/sunset extremes around each solstice. Because of the equation of
+/// time they land a few days before/after the solstice, so afternoons can keep growing
+/// even after the longest day (and vice-versa in winter).
+enum SolarTurning {
+    case earliestSunrise, latestSunset      // summer solstice neighbourhood
+    case latestSunrise, earliestSunset      // winter solstice neighbourhood
+
+    var label: String {
+        switch self {
+        case .earliestSunrise: return "Amanecer más temprano"
+        case .latestSunset:    return "Atardecer más tardío"
+        case .latestSunrise:   return "Amanecer más tardío"
+        case .earliestSunset:  return "Atardecer más temprano"
+        }
+    }
+
+    var emoji: String {
+        switch self {
+        case .earliestSunrise: return "🌅"
+        case .latestSunset:    return "🌇"
+        case .latestSunrise:   return "🌄"
+        case .earliestSunset:  return "🌆"
+        }
+    }
+
+    /// What starts happening from this day onward.
+    var note: String {
+        switch self {
+        case .earliestSunrise: return "Desde hoy los amaneceres empiezan a retrasarse"
+        case .latestSunset:    return "Desde hoy las tardes empiezan a acortarse"
+        case .latestSunrise:   return "Desde hoy los amaneceres empiezan a adelantarse"
+        case .earliestSunset:  return "Desde hoy las tardes empiezan a alargarse"
+        }
+    }
+}
+
 // MARK: - Service
 
 struct SunMoonService {
@@ -57,6 +95,61 @@ struct SunMoonService {
     private func hhmm(_ date: Date, tz: TimeZone) -> String {
         let f = DateFormatter(); f.timeZone = tz; f.dateFormat = "HH:mm"
         return f.string(from: date)
+    }
+
+    // MARK: - Solar turning points (solstice asymmetry)
+
+    /// The four days each year when sunrise/sunset reach their yearly extreme — these
+    /// do NOT fall on the solstice (equation of time), which is exactly why the mornings
+    /// and afternoons keep lengthening or shortening for a few days past it.
+    func solarTurningPoints(location: SunMoonLocation, from start: Date, years: Int = 1)
+        -> [(day: Date, time: Date, kind: SolarTurning)] {
+        let tz = TimeZone(identifier: location.tz) ?? .current
+        var cal = Calendar(identifier: .gregorian); cal.timeZone = tz
+        let y0 = cal.component(.year, from: start)
+        var out: [(Date, Date, SolarTurning)] = []
+        for y in y0...(y0 + max(0, years)) {
+            if let s = solsticeExtremes(year: y, month: 6, cal: cal, tz: tz, location: location) {
+                out.append((cal.startOfDay(for: s.minRise), s.minRise, .earliestSunrise))
+                out.append((cal.startOfDay(for: s.maxSet),  s.maxSet,  .latestSunset))
+            }
+            if let w = solsticeExtremes(year: y, month: 12, cal: cal, tz: tz, location: location) {
+                out.append((cal.startOfDay(for: w.maxRise), w.maxRise, .latestSunrise))
+                out.append((cal.startOfDay(for: w.minSet),  w.minSet,  .earliestSunset))
+            }
+        }
+        let floor = cal.startOfDay(for: start)
+        return out.filter { $0.0 >= floor }.sorted { $0.1 < $1.1 }
+    }
+
+    private struct SolsticeExtremes { var minRise, maxRise, minSet, maxSet: Date }
+
+    /// Scan a 46-day window from `month/1` for that period's sunrise/sunset extremes.
+    /// June 1 + 46d spans the earliest sunrise & latest sunset; Dec 1 + 46d the earliest
+    /// sunset (early Dec) & latest sunrise (early Jan). No DST transition in either window.
+    private func solsticeExtremes(year: Int, month: Int, cal: Calendar, tz: TimeZone,
+                                  location: SunMoonLocation) -> SolsticeExtremes? {
+        guard let begin = cal.date(from: DateComponents(year: year, month: month, day: 1)) else { return nil }
+        var best: SolsticeExtremes?
+        for d in 0..<46 {
+            guard let day = cal.date(byAdding: .day, value: d, to: begin) else { continue }
+            let t = sunTimes(date: day, lat: location.lat, lon: location.lon, tz: tz)
+            guard let rise = t.sunrise, let set = t.sunset else { continue }
+            guard var b = best else {
+                best = SolsticeExtremes(minRise: rise, maxRise: rise, minSet: set, maxSet: set); continue
+            }
+            if secondsOfDay(rise, cal) < secondsOfDay(b.minRise, cal) { b.minRise = rise }
+            if secondsOfDay(rise, cal) > secondsOfDay(b.maxRise, cal) { b.maxRise = rise }
+            if secondsOfDay(set,  cal) < secondsOfDay(b.minSet,  cal) { b.minSet  = set }
+            if secondsOfDay(set,  cal) > secondsOfDay(b.maxSet,  cal) { b.maxSet  = set }
+            best = b
+        }
+        return best
+    }
+
+    private func secondsOfDay(_ date: Date, _ cal: Calendar) -> Int {
+        let c = cal.dateComponents([.hour, .minute, .second], from: date)
+        return (c.hour ?? 0) * 3600 + (c.minute ?? 0) * 60 + (c.second ?? 0)
     }
 
     // MARK: - Sun calculations (NOAA / Meeus algorithm)

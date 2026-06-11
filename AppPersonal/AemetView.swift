@@ -163,6 +163,22 @@ struct AemetView: View {
             todayDetailsCard()
             observationCard()
             sourceCard()
+            updatedFooter()
+        }
+    }
+
+    /// Timestamp of the last successful fetch, shown at the very bottom of the screen.
+    @ViewBuilder
+    private func updatedFooter() -> some View {
+        if let t = lastLoadedAt {
+            HStack(spacing: 5) {
+                Spacer()
+                Image(systemName: "clock.arrow.circlepath").font(.caption2)
+                Text("Actualizado \(shortDateTime(t))").font(.caption2)
+                Spacer()
+            }
+            .foregroundStyle(.secondary)
+            .padding(.top, 2).padding(.bottom, 6)
         }
     }
 
@@ -183,31 +199,43 @@ struct AemetView: View {
         let windKmh = lastObs?.vv.map { Int($0 * 3.6) }
         let gustKmh = lastObs?.vmax.map { Int($0 * 3.6) }
 
-        return HStack(spacing: 16) {
+        return HStack(alignment: .top, spacing: 16) {
             WeatherIconView(code: skyCode).frame(width: 60, height: 60)
             VStack(alignment: .leading, spacing: 4) {
                 Text(currentTemp.map { "\(Int($0.rounded()))°" } ?? (tMax.map { "\(Int($0.rounded()))°" } ?? "—"))
-                    .font(.system(size: 44, weight: .ultraLight)).foregroundStyle(.white)
+                    .font(.system(size: 46, weight: .light)).foregroundStyle(.white)
                 Text(skyDesc).font(.subheadline).foregroundStyle(.white.opacity(0.9))
                 HStack(spacing: 8) {
                     if let mx = tMax { Text("↑\(Int(mx.rounded()))°").foregroundStyle(.white) }
                     if let mn = tMin { Text("↓\(Int(mn.rounded()))°").foregroundStyle(.white.opacity(0.7)) }
-                    if let hum = lastObs?.hr { Text("💧\(Int(hum))%").foregroundStyle(.white.opacity(0.85)) }
-                }
-                .font(.footnote)
-                HStack(spacing: 8) {
-                    if let w = windKmh { Text("💨 \(w) km/h").foregroundStyle(.white.opacity(0.85)) }
-                    if let g = gustKmh, g > 0 { Text("racha \(g)").foregroundStyle(.white.opacity(0.7)) }
-                    if let rain = lastObs?.prec, rain > 0 { Text("🌧 \(rain) L").foregroundStyle(.white.opacity(0.85)) }
                 }
                 .font(.footnote)
             }
-            Spacer()
+            Spacer(minLength: 8)
+            // Right column fills the previously-empty space with the live readings.
+            VStack(alignment: .trailing, spacing: 7) {
+                if let hum = lastObs?.hr { heroStat("💧", "\(Int(hum))%", "Humedad") }
+                if let w = windKmh {
+                    heroStat("💨", "\(w) km/h", (gustKmh.map { $0 > 0 ? "racha \($0)" : "Viento" }) ?? "Viento")
+                }
+                if let rain = lastObs?.prec, rain > 0 { heroStat("🌧", "\(rain) L/m²", "Lluvia 1h") }
+            }
         }
         .frame(maxWidth: .infinity).padding(16)
         .background(AppTheme.heroGradient)
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .shadow(color: AppTheme.greenDeep.opacity(0.3), radius: 8, y: 4)
+    }
+
+    /// Right-column readout in the hero card: emoji + value over a faint caption.
+    private func heroStat(_ icon: String, _ value: String, _ label: String) -> some View {
+        VStack(alignment: .trailing, spacing: 1) {
+            HStack(spacing: 5) {
+                Text(icon).font(.subheadline)
+                Text(value).font(.title3).fontWeight(.bold).foregroundStyle(.white)
+            }
+            Text(label).font(.caption).foregroundStyle(.white.opacity(0.7))
+        }
     }
 
     private func miniStat(label: String, value: String) -> some View {
@@ -301,7 +329,7 @@ struct AemetView: View {
             label = "\(dayName) \(String(format: "%02d", c.hour))h"
         }
         return VStack(spacing: 4) {
-            Text(label).font(.caption2).foregroundStyle(.secondary)
+            Text(label).font(.caption).fontWeight(.semibold).foregroundStyle(.primary)
             WeatherIconView(code: c.skyCode).frame(width: 36, height: 36)
             Text("\(Int(c.temp.rounded()))°").font(.subheadline).fontWeight(.bold)
             if let p = c.prob, p > 0 {
@@ -326,20 +354,42 @@ struct AemetView: View {
             let tMin = temps.min() ?? 0
             let tMax = temps.max() ?? 0
             let tickStep = max(1, entries.count / 6)
+            // Precipitation-probability bars live in a band below the curve; `floor` is the
+            // chart's lower bound and `barCeil` how high a 100%-probability bar reaches.
+            let span = max(tMax - tMin, 1)
+            let floor = tMin - span * 0.5
+            let barCeil = tMin - span * 0.08
+            let hasRain = entries.contains { ($0.prob ?? 0) > 0 }
             VStack(spacing: 0) {
                 HStack {
                     Text("Temperatura próximas horas")
                         .font(.caption).fontWeight(.bold).textCase(.uppercase)
                         .foregroundStyle(.secondary).tracking(1)
                     Spacer()
-                    Text("\(Int(tMin.rounded()))° / \(Int(tMax.rounded()))°")
-                        .font(.caption).fontWeight(.semibold).foregroundStyle(.secondary)
+                    HStack(spacing: 8) {
+                        if hasRain {
+                            HStack(spacing: 3) {
+                                RoundedRectangle(cornerRadius: 1).fill(.blue.opacity(0.35)).frame(width: 7, height: 9)
+                                Text("lluvia").font(.caption2).foregroundStyle(.secondary)
+                            }
+                        }
+                        Text("\(Int(tMin.rounded()))° / \(Int(tMax.rounded()))°")
+                            .font(.caption).fontWeight(.semibold).foregroundStyle(.secondary)
+                    }
                 }
                 .padding(.horizontal, 16).padding(.vertical, 12)
                 Divider()
                 Chart {
                     ForEach(indexed, id: \.offset) { i, e in
-                        AreaMark(x: .value("h", i), y: .value("°C", e.temp))
+                        if let p = e.prob, p > 0 {
+                            BarMark(x: .value("h", i),
+                                    yStart: .value("base", floor),
+                                    yEnd: .value("prob", floor + (barCeil - floor) * Double(p) / 100),
+                                    width: .ratio(0.55))
+                                .foregroundStyle(.blue.opacity(0.30))
+                                .cornerRadius(2)
+                        }
+                        AreaMark(x: .value("h", i), yStart: .value("base", floor), yEnd: .value("°C", e.temp))
                             .interpolationMethod(.catmullRom)
                             .foregroundStyle(LinearGradient(
                                 colors: [.orange.opacity(0.28), .orange.opacity(0.02)],
@@ -350,10 +400,16 @@ struct AemetView: View {
                             .lineStyle(StrokeStyle(lineWidth: 2.5))
                     }
                 }
+                .chartYScale(domain: floor ... (tMax + span * 0.12))
                 .chartYAxis {
-                    AxisMarks(position: .leading) { v in
+                    AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { v in
                         AxisGridLine()
-                        AxisValueLabel { if let d = v.as(Double.self) { Text("\(Int(d))°").font(.caption2) } }
+                        AxisValueLabel {
+                            // Hide labels in the precip band so the axis reads only temperatures.
+                            if let d = v.as(Double.self), d >= tMin - span * 0.05 {
+                                Text("\(Int(d))°").font(.caption2)
+                            }
+                        }
                     }
                 }
                 .chartXAxis {
@@ -365,7 +421,7 @@ struct AemetView: View {
                         }
                     }
                 }
-                .frame(height: 170)
+                .frame(height: 138)
                 .padding(.horizontal, 12).padding(.vertical, 12)
             }
             .background(.background)
@@ -545,7 +601,7 @@ struct AemetView: View {
                     }
                     if let uv = om.uvMax ?? om.uvIndex {
                         airBadge(title: "Índice UV", value: "\(Int(uv.rounded()))",
-                                 subtitle: uvLabel(uv), color: uvColor(uv))
+                                 subtitle: uvLabel(uv), color: uvColor(uv), scale: "11")
                     }
                 }
                 .padding(.horizontal, 12).padding(.top, 12)
@@ -585,10 +641,16 @@ struct AemetView: View {
         }
     }
 
-    private func airBadge(title: String, value: String, subtitle: String, color: Color) -> some View {
+    private func airBadge(title: String, value: String, subtitle: String, color: Color,
+                          scale: String? = nil) -> some View {
         VStack(spacing: 2) {
             Text(title).font(.caption2).foregroundStyle(.secondary).textCase(.uppercase)
-            Text(value).font(.system(size: 30, weight: .heavy)).foregroundStyle(color)
+            HStack(alignment: .firstTextBaseline, spacing: 1) {
+                Text(value).font(.system(size: 30, weight: .heavy)).foregroundStyle(color)
+                if let scale {
+                    Text("/\(scale)").font(.caption).fontWeight(.semibold).foregroundStyle(color.opacity(0.65))
+                }
+            }
             Text(subtitle).font(.caption).fontWeight(.semibold).foregroundStyle(color)
         }
         .frame(maxWidth: .infinity)

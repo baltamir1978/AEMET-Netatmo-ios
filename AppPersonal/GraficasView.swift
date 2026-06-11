@@ -284,6 +284,12 @@ struct ChartCard: View {
         }
     }
 
+    /// Whether the selected metric is grammatically feminine (la temperatura/humedad/presión)
+    /// so the stat labels read "Máxima/Mínima" instead of "Máximo/Mínimo".
+    private var statFeminine: Bool {
+        ["Temperature", "Humidity", "Pressure", "Rain"].contains(selectedType)
+    }
+
     private var typeUnit: String {
         switch selectedType {
         case "Temperature": return "°C"
@@ -394,7 +400,7 @@ struct ChartCard: View {
             .frame(height: 60)
         } else {
             HStack(spacing: 0) {
-                statItem(label: "Mínimo",
+                statItem(label: statFeminine ? "Mínima" : "Mínimo",
                          value: data.min.map { "\(String(format: "%.1f", $0)) \(typeUnit)" } ?? "—",
                          date: data.minLabel)
                 Divider()
@@ -402,7 +408,7 @@ struct ChartCard: View {
                     : String(format: "%.1f \(typeUnit)", data.values.reduce(0, +) / Double(data.values.count))
                 statItem(label: "Promedio", value: avg, date: nil)
                 Divider()
-                statItem(label: "Máximo",
+                statItem(label: statFeminine ? "Máxima" : "Máximo",
                          value: data.max.map { "\(String(format: "%.1f", $0)) \(typeUnit)" } ?? "—",
                          date: data.maxLabel)
             }
