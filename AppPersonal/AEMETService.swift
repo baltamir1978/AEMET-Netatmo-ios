@@ -91,6 +91,26 @@ struct AEMETService {
         return first
     }
 
+    // MARK: - Synchronous cache reads
+    //
+    // Let a view paint instantly from the last good payload on launch (no await,
+    // no network) so the screen never flashes blank before the live refresh lands.
+
+    func cachedDaily(municipio: String) -> AemetDailyRoot? {
+        guard let c = AemetDiskCache.load("diaria_\(municipio)") else { return nil }
+        return try? Self.decodeDaily(c.data)
+    }
+
+    func cachedHourly(municipio: String) -> AemetHourlyRoot? {
+        guard let c = AemetDiskCache.load("horaria_\(municipio)") else { return nil }
+        return try? Self.decodeHourly(c.data)
+    }
+
+    func cachedObservation(idema: String) -> [AemetObservationRecord]? {
+        guard let c = AemetDiskCache.load("obs_\(idema)") else { return nil }
+        return try? JSONDecoder().decode([AemetObservationRecord].self, from: c.data)
+    }
+
     // MARK: - Municipality catalog
 
     func allMunicipios() async throws -> [AemetMunicipio] {

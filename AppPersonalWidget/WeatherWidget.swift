@@ -79,7 +79,8 @@ struct WeatherWidgetView: View {
         return (entry.aemet?.hourly ?? []).filter { !$0.isToday || $0.hour >= nowHour }
     }
 
-    /// Compact AEMET warning chip (icon-only for small, icon + phenomenon otherwise).
+    /// Compact AEMET warning pill: icon-only on the small widget, icon + phenomenon
+    /// on the medium (a slightly chunkier capsule so it shows a bit more yellow).
     @ViewBuilder private func alertChip(compact: Bool) -> some View {
         if let alert = entry.aemet?.alert {
             HStack(spacing: 3) {
@@ -88,8 +89,28 @@ struct WeatherWidgetView: View {
             }
             .font(.caption2.weight(.bold))
             .foregroundStyle(.white)
-            .padding(.horizontal, compact ? 4 : 6).padding(.vertical, 2)
+            .padding(.horizontal, compact ? 4 : 9).padding(.vertical, 2)
             .background(alert.color, in: Capsule())
+        }
+    }
+
+    /// Full-width AEMET warning banner for the large widget: spans the widget so the
+    /// phenomenon and level read in full instead of truncating.
+    @ViewBuilder private var alertBanner: some View {
+        if let alert = entry.aemet?.alert {
+            HStack(spacing: 6) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                Text(alert.phenomenon).fontWeight(.bold)
+                Text("· aviso \(alert.levelName)").foregroundStyle(.white.opacity(0.9))
+                Spacer(minLength: 0)
+            }
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(.white)
+            .lineLimit(1)
+            .minimumScaleFactor(0.85)
+            .padding(.horizontal, 8).padding(.vertical, 4)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(alert.color, in: RoundedRectangle(cornerRadius: 8))
         }
     }
 
@@ -182,9 +203,12 @@ struct WeatherWidgetView: View {
         } else {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(alignment: .top) {
-                    currentLeft(tempSize: 50)
+                    currentLeft(tempSize: 50, showAlert: false)
                     Spacer(minLength: 8)
                     trailingDetails(showUpdated: true)
+                }
+                if entry.aemet?.alert != nil {
+                    alertBanner.padding(.top, 8)
                 }
                 let hours = upcomingHours
                 if !hours.isEmpty {
@@ -219,12 +243,12 @@ struct WeatherWidgetView: View {
     // MARK: Shared pieces
 
     /// Location + big temperature + condition (left side of medium & large).
-    private func currentLeft(tempSize: CGFloat) -> some View {
+    private func currentLeft(tempSize: CGFloat, showAlert: Bool = true) -> some View {
         VStack(alignment: .leading, spacing: 1) {
             HStack(spacing: 5) {
                 Text(locationTitle).font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.white).lineLimit(1)
-                alertChip(compact: false)
+                    .foregroundStyle(.white).lineLimit(1).layoutPriority(1)
+                if showAlert { alertChip(compact: false) }
             }
             HStack(alignment: .top, spacing: 6) {
                 Text(currentTemp.map { "\($0)°" } ?? "—")

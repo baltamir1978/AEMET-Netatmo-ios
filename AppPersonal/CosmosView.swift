@@ -425,13 +425,21 @@ struct CosmosView: View {
     // MARK: - Data loading
 
     private func loadAll() async {
-        isLoading = true
-        if store.selectedCode == SavedLocation.currentCode { _ = await store.resolveCurrent() }
-        // Phases/events first: loadMoonPhases clears selectedMoonDay so the Sun·Moon card
-        // below resolves to the picker date, not a stale tapped day.
+        // Astronomy is deterministic and offline — compute it first (before any await)
+        // so the Sun·Moon card and calendar paint instantly using the known location,
+        // never waiting on GPS resolution or the tides network call.
+        // loadMoonPhases clears selectedMoonDay so the Sun·Moon card resolves to the
+        // picker date, not a stale tapped day.
         loadMoonPhases()
         loadAstroEvents()
         loadSunMoon()
+        isLoading = true
+        // Refine the GPS-backed location, then recompute the location-dependent pieces.
+        if store.selectedCode == SavedLocation.currentCode {
+            _ = await store.resolveCurrent()
+            loadSunMoon()
+            loadAstroEvents()
+        }
         await loadTides()
         isLoading = false
     }

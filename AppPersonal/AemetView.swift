@@ -845,6 +845,9 @@ struct AemetView: View {
 
     private func loadForecast(force: Bool = false) async {
         guard AppConfiguration.shared.isAemetConfigured else { return }
+        // Paint the last cached forecast synchronously (before any await) so the
+        // screen keeps showing the previous data instead of flashing blank.
+        if !hasData { primeFromCache() }
         // Auto-refreshes reuse fresh cache; pull/tap forces a live request.
         let maxAge: TimeInterval? = force ? nil : aemetTTL
         isLoading = true
@@ -905,6 +908,20 @@ struct AemetView: View {
             loadError = "AEMET no disponible: \(detail)"
         }
         isLoading = false
+    }
+
+    /// Fill `daily`/`hourly`/`obs` from the on-disk cache without touching the network,
+    /// so a relaunch shows the previous forecast immediately while the live fetch runs.
+    private func primeFromCache() {
+        let municipio = currentMunicipio
+        let d = AEMETService.shared.cachedDaily(municipio: municipio)
+        let h = AEMETService.shared.cachedHourly(municipio: municipio)
+        guard d != nil || h != nil else { return }
+        daily = d
+        hourly = h
+        if let id = locationIdema, let o = AEMETService.shared.cachedObservation(idema: id) {
+            obs = o
+        }
     }
 
     /// Persist the selected city's AEMET forecast to the App Group (global key + keyed by code).
