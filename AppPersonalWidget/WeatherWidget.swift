@@ -89,7 +89,10 @@ struct WeatherWidgetView: View {
             }
             .font(.caption2.weight(.bold))
             .foregroundStyle(.white)
-            .padding(.horizontal, compact ? 4 : 9).padding(.vertical, 2)
+            .padding(.horizontal, compact ? 4 : 18).padding(.vertical, 2)
+            // Medium: let the capsule stretch across the rest of the row so it shows
+            // more yellow; small stays icon-only and hugs its content.
+            .frame(maxWidth: compact ? nil : .infinity, alignment: .leading)
             .background(alert.color, in: Capsule())
         }
     }
@@ -174,6 +177,9 @@ struct WeatherWidgetView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
         } else {
             VStack(alignment: .leading, spacing: 6) {
+                // .center keeps the right column (máx/mín, plus Netatmo when on its own
+                // town) vertically centred: when Netatmo is absent the máx/mín drops to
+                // the middle, leaving the top row free so the alert capsule can run longer.
                 HStack(alignment: .center) {
                     currentLeft(tempSize: 38)
                     Spacer(minLength: 8)
