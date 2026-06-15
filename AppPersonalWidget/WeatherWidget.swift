@@ -177,11 +177,18 @@ struct WeatherWidgetView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
         } else {
             VStack(alignment: .leading, spacing: 6) {
-                // .center keeps the right column (máx/mín, plus Netatmo when on its own
-                // town) vertically centred: when Netatmo is absent the máx/mín drops to
-                // the middle, leaving the top row free so the alert capsule can run longer.
-                HStack(alignment: .center) {
-                    currentLeft(tempSize: 38)
+                // Location + alert live in their own full-width top row so the capsule can
+                // run across the whole widget (the right column below holds máx/mín, which
+                // is centred lower down and leaves this top band free).
+                HStack(spacing: 5) {
+                    Text(locationTitle).font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white).lineLimit(1).layoutPriority(1)
+                    alertChip(compact: false)
+                }
+                // .top aligns máx/mín with the top of the big temperature so they don't
+                // drift to the vertical middle of the (now location-less) left column.
+                HStack(alignment: .top) {
+                    currentLeft(tempSize: 38, showAlert: false, showLocation: false)
                     Spacer(minLength: 8)
                     trailingDetails(showUpdated: false, maxMinFont: .title3.weight(.semibold))
                 }
@@ -249,12 +256,17 @@ struct WeatherWidgetView: View {
     // MARK: Shared pieces
 
     /// Location + big temperature + condition (left side of medium & large).
-    private func currentLeft(tempSize: CGFloat, showAlert: Bool = true) -> some View {
+    /// `showLocation` lets the medium hoist the location+alert into its own full-width
+    /// top row (so the capsule can use the free space above máx/mín).
+    private func currentLeft(tempSize: CGFloat, showAlert: Bool = true,
+                             showLocation: Bool = true) -> some View {
         VStack(alignment: .leading, spacing: 1) {
-            HStack(spacing: 5) {
-                Text(locationTitle).font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.white).lineLimit(1).layoutPriority(1)
-                if showAlert { alertChip(compact: false) }
+            if showLocation {
+                HStack(spacing: 5) {
+                    Text(locationTitle).font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white).lineLimit(1).layoutPriority(1)
+                    if showAlert { alertChip(compact: false) }
+                }
             }
             HStack(alignment: .top, spacing: 6) {
                 Text(currentTemp.map { "\($0)°" } ?? "—")
@@ -325,6 +337,9 @@ struct WeatherWidgetView: View {
             Text("\(h.temp)°").font(.footnote.weight(.semibold)).foregroundStyle(.white)
             if let p = h.prob, p > 0 {
                 Text("\(p)%").font(.system(size: 9)).foregroundStyle(WidgetTheme.greenBright)
+                    // Draw at natural width so "100%" (one digit wider) never gets an ellipsis;
+                    // it's tiny next to the column width, so it can't overlap neighbours.
+                    .lineLimit(1).fixedSize()
             } else {
                 Text(" ").font(.system(size: 9))
             }

@@ -369,7 +369,7 @@ struct AemetView: View {
                     HStack(spacing: 8) {
                         if hasRain {
                             HStack(spacing: 3) {
-                                RoundedRectangle(cornerRadius: 1).fill(.blue.opacity(0.35)).frame(width: 7, height: 9)
+                                RoundedRectangle(cornerRadius: 1).fill(.blue.opacity(0.45)).frame(width: 7, height: 9)
                                 Text("lluvia").font(.caption2).foregroundStyle(.secondary)
                             }
                         }
@@ -381,14 +381,6 @@ struct AemetView: View {
                 Divider()
                 Chart {
                     ForEach(indexed, id: \.offset) { i, e in
-                        if let p = e.prob, p > 0 {
-                            BarMark(x: .value("h", i),
-                                    yStart: .value("base", floor),
-                                    yEnd: .value("prob", floor + (barCeil - floor) * Double(p) / 100),
-                                    width: .ratio(0.55))
-                                .foregroundStyle(.blue.opacity(0.30))
-                                .cornerRadius(2)
-                        }
                         AreaMark(x: .value("h", i), yStart: .value("base", floor), yEnd: .value("°C", e.temp))
                             .interpolationMethod(.catmullRom)
                             .foregroundStyle(LinearGradient(
@@ -398,6 +390,19 @@ struct AemetView: View {
                             .interpolationMethod(.catmullRom)
                             .foregroundStyle(.orange)
                             .lineStyle(StrokeStyle(lineWidth: 2.5))
+                    }
+                    // Rain probability as discrete blue bars, drawn last so they sit on top of
+                    // the orange area. RuleMark (a thick vertical line) renders reliably on the
+                    // continuous x axis — BarMark's .ratio width collapses to ~nothing, and a
+                    // second AreaMark warps the orange area's baseline. Tops stay below the curve.
+                    ForEach(indexed, id: \.offset) { i, e in
+                        if let p = e.prob, p > 0 {
+                            RuleMark(x: .value("h", i),
+                                     yStart: .value("base", floor),
+                                     yEnd: .value("prob", floor + (barCeil - floor) * Double(p) / 100))
+                                .lineStyle(StrokeStyle(lineWidth: 5, lineCap: .round))
+                                .foregroundStyle(.blue.opacity(0.40))
+                        }
                     }
                 }
                 .chartYScale(domain: floor ... (tMax + span * 0.12))
