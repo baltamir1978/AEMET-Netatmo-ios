@@ -65,7 +65,10 @@ struct WeatherWidgetView: View {
     // The big number: prefer the real Netatmo reading, fall back to AEMET's current hour.
     private var currentTemp: Int? {
         if let t = entry.netatmo?.temperature { return Int(t.rounded()) }
-        return entry.aemet?.currentTemp
+        // Fall back to the first upcoming hourly point: AEMET sometimes prunes the
+        // current (partial) hour from its forecast, which leaves `currentTemp` nil and
+        // the widget showing "—". The hourly strip is range-based, so it always has it.
+        return entry.aemet?.currentTemp ?? entry.aemet?.hourly?.first?.temp
     }
 
     private var locationTitle: String {
