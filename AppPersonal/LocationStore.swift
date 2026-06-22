@@ -49,6 +49,19 @@ final class LocationStore: ObservableObject {
         persist()
     }
 
+    private var lastCurrentRefresh = Date.distantPast
+
+    /// Re-resolve the GPS "Ubicación actual" entry for widgets even when the app shows a
+    /// fixed city. That entry's `resolvedCurrent` is only refreshed in-app, so without
+    /// this a widget set to "📍 Ubicación actual" freezes at the town GPS last resolved.
+    /// Throttled; `resolveCurrent` reloads widget timelines on success.
+    func refreshCurrentForWidgets() async {
+        guard selectedCode != SavedLocation.currentCode else { return }   // already refreshed on-screen
+        guard Date().timeIntervalSince(lastCurrentRefresh) > 10 * 60 else { return }
+        lastCurrentRefresh = Date()
+        _ = await resolveCurrent()
+    }
+
     /// Fetch a GPS fix and resolve it to the AEMET municipio + observation station.
     @discardableResult
     func resolveCurrent() async -> Bool {

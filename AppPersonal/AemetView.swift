@@ -865,6 +865,12 @@ struct AemetView: View {
                 isLoading = false
                 return
             }
+        } else {
+            // The app is showing a fixed city, but a widget may be set to "📍 Ubicación
+            // actual". That entry reads `resolvedCurrent`, which only this app refreshes —
+            // so keep it (and its widget snapshot) fresh here too, or the widget freezes
+            // at the town where GPS was last resolved.
+            Task { await refreshCurrentLocationForWidget() }
         }
         let municipio = currentMunicipio
         let idema = locationIdema
@@ -937,6 +943,26 @@ struct AemetView: View {
         WidgetStore.save(aemet: snap, forCode: currentMunicipio)
     }
 
+    /// Re-resolve the GPS "Ubicación actual" entry and cache its forecast snapshot so a
+    /// widget set to "📍 Ubicación actual" stays current even while the app shows a fixed
+    /// city (otherwise `resolvedCurrent` freezes at the last town GPS resolved). Throttled.
+    private func refreshCurrentLocationForWidget() async {
+        await store.refreshCurrentForWidgets()
+        // Make sure the resolved town has a forecast snapshot keyed by its code (cheap when
+        // the disk cache is warm), so the "📍 Ubicación actual" weather widget has data and
+        // doesn't fall back to the app's fixed city.
+        guard let loc = store.resolvedCurrent, loc.code != currentMunicipio else { return }
+        async let d = try? await AEMETService.shared.forecastDaily(municipio: loc.code, maxAge: aemetTTL)
+        async let h = try? await AEMETService.shared.forecastHourly(municipio: loc.code, maxAge: aemetTTL)
+        let (dr, hr) = await (d, h)
+        guard dr != nil || hr != nil else { return }
+        let cityAlert = (try? await AEMETService.shared.alerts(
+            municipioCode: loc.code, lat: loc.lat, lon: loc.lon, maxAge: aemetAlertTTL))?.first?.badge
+        let snap = Self.makeAemetSnapshot(municipio: loc.name, daily: dr, hourly: hr, alert: cityAlert)
+        WidgetStore.save(aemet: snap, forCode: loc.code)
+        WidgetStore.reload()
+    }
+
     /// Fetch & cache every followed city's forecast so a widget configured for any of
     /// them has data without the user opening that city. Throttled to ~20 min.
     private func refreshAllWidgetCities() async {
@@ -971,10 +997,14 @@ struct AemetView: View {
             ?? hourlyDay?.estadoCielo?.first?.value
         let skyDesc = hourlyDay?.estadoCielo?.first(where: { Int($0.periodo ?? "") == nowHour })?.descripcion
             ?? hourlyDay?.estadoCielo?.first?.descripcion ?? "—"
-        let currentTemp = hourlyDay?.temperatura?
-            .first(where: { Int($0.periodo ?? "") == nowHour })?.value.flatMap { Double($0) }
-
         let hourPoints = Self.hourPoints(from: hourly)
+        // Big-number temp: the forecast for the current hour, falling back to the first
+        // upcoming hour. AEMET sometimes prunes the current (partial) hour from dia[0],
+        // which left the exact-hour match nil and the widget showing "—".
+        let currentTemp: Int? = hourlyDay?.temperatura?
+            .first(where: { Int($0.periodo ?? "") == nowHour })?
+            .value.flatMap { Double($0) }.map { Int($0.rounded()) }
+            ?? hourPoints.first?.temp
 
         let isoFmt = ISO8601DateFormatter(); isoFmt.formatOptions = [.withFullDate]
         let dayPoints: [AemetDayPoint] = (daily?.prediccion?.dia ?? []).prefix(6).compactMap { day in
@@ -992,7 +1022,7 @@ struct AemetView: View {
             municipio: municipio,
             tempMin: today?.temperatura?.minima.map { Int($0.rounded()) },
             tempMax: today?.temperatura?.maxima.map { Int($0.rounded()) },
-            currentTemp: currentTemp.map { Int($0.rounded()) },
+            currentTemp: currentTemp,
             skyDescription: skyDesc,
             skyCode: skyCode,
             date: Date(),

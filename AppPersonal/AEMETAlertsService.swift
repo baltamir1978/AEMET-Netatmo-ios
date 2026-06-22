@@ -74,11 +74,15 @@ enum AemetCAP {
     /// Parse a CAP `.tar` bundle, returning the warnings whose zone polygons
     /// contain the point, one per phenomenon at its highest covering level.
     static func parse(tar: Data, lat: Double, lon: Double) -> [AemetAlert] {
+        let now = Date()
         var best: [String: AemetAlert] = [:]   // phenomenon → strongest covering alert
         for (_, xml) in TarReader.entries(in: tar) {
             let parser = CAPDocumentParser()
             for info in parser.parse(xml) where info.language.hasPrefix("es") {
                 guard info.level > .verde else { continue }
+                // The CAP bundle keeps several <info> periods; drop ones whose window has
+                // already closed so a warning that ended (e.g. last Sunday) stops showing.
+                if let ex = info.expires, ex < now { continue }
                 guard let area = info.areas.first(where: { $0.contains(lat: lat, lon: lon) }) else { continue }
                 let alert = AemetAlert(
                     phenomenon: info.phenomenon,

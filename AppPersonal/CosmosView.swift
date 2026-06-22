@@ -439,6 +439,10 @@ struct CosmosView: View {
             _ = await store.resolveCurrent()
             loadSunMoon()
             loadAstroEvents()
+        } else {
+            // Showing a fixed city, but a Sol·Luna widget may be set to "📍 Ubicación
+            // actual" — keep its resolvedCurrent fresh so it doesn't freeze at an old town.
+            Task { await store.refreshCurrentForWidgets() }
         }
         await loadTides()
         isLoading = false
