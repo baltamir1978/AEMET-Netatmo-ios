@@ -185,7 +185,7 @@ struct AemetView: View {
     // MARK: - Now card
 
     private func nowCard() -> some View {
-        let today = daily?.prediccion?.dia?.first
+        let today = Self.upcomingDays(daily).first
         let hourlyDay = hourly?.prediccion?.dia?.first
         let lastObs = obs?.last
         let currentTemp = lastObs?.ta
@@ -439,7 +439,9 @@ struct AemetView: View {
 
     @ViewBuilder
     private func dailyCard() -> some View {
-        let days = daily?.prediccion?.dia ?? []
+        // AEMET sometimes prepends past days (e.g. "ayer") to the daily array.
+        // Drop anything before today so the list starts at "Hoy".
+        let days = Self.upcomingDays(daily)
         if !days.isEmpty {
             VStack(spacing: 0) {
                 HStack {
@@ -487,7 +489,7 @@ struct AemetView: View {
 
     @ViewBuilder
     private func todayDetailsCard() -> some View {
-        if let today = daily?.prediccion?.dia?.first {
+        if let today = Self.upcomingDays(daily).first {
             let t = today.temperatura
             let st = today.sensTermica
             let hr = today.humedadRelativa
@@ -986,11 +988,25 @@ struct AemetView: View {
     }
 
     /// Build a widget snapshot from forecast roots (pure — works for any city).
+    /// True when the forecast day's date falls before today (AEMET occasionally
+    /// includes "ayer" at the head of the daily array).
+    static func isPastDay(_ fecha: String?) -> Bool {
+        guard let fecha else { return false }
+        let f = ISO8601DateFormatter(); f.formatOptions = [.withFullDate]
+        guard let date = f.date(from: String(fecha.prefix(10))) else { return false }
+        return Calendar.current.startOfDay(for: date) < Calendar.current.startOfDay(for: Date())
+    }
+
+    /// The daily forecast with any past days ("ayer") dropped, so index 0 is today.
+    static func upcomingDays(_ root: AemetDailyRoot?) -> [AemetDailyDay] {
+        (root?.prediccion?.dia ?? []).filter { !isPastDay($0.fecha) }
+    }
+
     static func makeAemetSnapshot(municipio: String,
                                   daily: AemetDailyRoot?,
                                   hourly: AemetHourlyRoot?,
                                   alert: AemetAlertBadge? = nil) -> AemetSnapshot {
-        let today = daily?.prediccion?.dia?.first
+        let today = Self.upcomingDays(daily).first
         let hourlyDay = hourly?.prediccion?.dia?.first
         let nowHour = Calendar.current.component(.hour, from: Date())
         let skyCode = hourlyDay?.estadoCielo?.first(where: { Int($0.periodo ?? "") == nowHour })?.value
@@ -1007,7 +1023,7 @@ struct AemetView: View {
             ?? hourPoints.first?.temp
 
         let isoFmt = ISO8601DateFormatter(); isoFmt.formatOptions = [.withFullDate]
-        let dayPoints: [AemetDayPoint] = (daily?.prediccion?.dia ?? []).prefix(6).compactMap { day in
+        let dayPoints: [AemetDayPoint] = upcomingDays(daily).prefix(6).compactMap { day in
             guard let date = isoFmt.date(from: String((day.fecha ?? "").prefix(10))) else { return nil }
             return AemetDayPoint(
                 date: date,
