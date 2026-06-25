@@ -6,12 +6,29 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
+                refreshSection
                 aemetSection
                 netatmoSection
                 stationSection
                 helpSection
             }
             .navigationTitle("Ajustes")
+        }
+    }
+
+    // MARK: - Refresh cadence
+
+    private var refreshSection: some View {
+        Section {
+            Picker("Actualizar cada", selection: $cfg.refreshIntervalHours) {
+                ForEach(RefreshInterval.allCases) { interval in
+                    Text(interval.label).tag(interval.rawValue)
+                }
+            }
+        } header: {
+            Text("Actualización en segundo plano")
+        } footer: {
+            Text("Cada cuánto la app y los widgets intentan traer datos nuevos. iOS puede espaciar las actualizaciones en segundo plano para ahorrar batería.")
         }
     }
 

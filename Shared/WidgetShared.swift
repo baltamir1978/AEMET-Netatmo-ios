@@ -38,6 +38,21 @@ struct SavedLocation: Codable, Identifiable, Equatable {
     ]
 }
 
+// MARK: - Refresh cadence
+
+/// How often the app (background task) and the widgets try to pull fresh data.
+/// Shared so the Settings picker, the widget timelines and the BG task all agree.
+enum RefreshInterval: Int, CaseIterable, Identifiable {
+    case h1 = 1, h3 = 3, h6 = 6, h12 = 12
+
+    var id: Int { rawValue }
+    var hours: Int { rawValue }
+    var seconds: TimeInterval { TimeInterval(rawValue) * 3600 }
+    var label: String { "\(rawValue) h" }
+
+    static let `default` = RefreshInterval.h3
+}
+
 // MARK: - Snapshots
 
 /// Latest Netatmo exterior reading, written by the app's Actual tab.
@@ -118,6 +133,30 @@ enum WidgetStore {
     private static let locationsKey = "widget.locations"
     private static let selectedKey  = "widget.locations.selected"
     private static let resolvedCurrentKey = "widget.locations.current"
+    private static let intervalKey  = "widget.refresh.intervalHours"
+    private static let aemetApiKeyKey = "widget.aemet.apiKey"
+
+    // Refresh cadence ----------------------------------------------------------
+
+    static func saveRefreshInterval(_ interval: RefreshInterval) {
+        defaults?.set(interval.rawValue, forKey: intervalKey)
+    }
+
+    static func loadRefreshInterval() -> RefreshInterval {
+        let raw = defaults?.integer(forKey: intervalKey) ?? 0
+        return RefreshInterval(rawValue: raw) ?? .default
+    }
+
+    // AEMET key (mirrored from AppConfiguration so the widget can self-fetch) ---
+
+    static func saveAemetApiKey(_ key: String) {
+        defaults?.set(key, forKey: aemetApiKeyKey)
+    }
+
+    static func loadAemetApiKey() -> String? {
+        let k = defaults?.string(forKey: aemetApiKeyKey)
+        return (k?.isEmpty == false) ? k : nil
+    }
 
     // Snapshots ----------------------------------------------------------------
 

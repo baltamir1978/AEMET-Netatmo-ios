@@ -6,7 +6,9 @@ struct AEMETService {
     static let shared = AEMETService()
     let base = "https://opendata.aemet.es/opendata/api"
 
-    private var apiKey: String { AppConfiguration.shared.aemetApiKey }
+    // Read from the shared App Group so this service compiles & runs inside the
+    // widget extension too (the app mirrors `AppConfiguration.aemetApiKey` there).
+    private var apiKey: String { WidgetStore.loadAemetApiKey() ?? "" }
 
     // MARK: - Forecast
     //

@@ -22,18 +22,48 @@ struct WeatherProvider: AppIntentTimelineProvider {
     }
 
     func timeline(for configuration: SelectLocationIntent, in context: Context) async -> Timeline<WeatherEntry> {
-        let e = entry(for: configuration)
-        // Snapshots only change when the app refreshes; recheck in ~30 min.
-        let next = Calendar.current.date(byAdding: .minute, value: 30, to: Date()) ?? Date()
+        let loc = resolveWidgetLocation(configuration)
+        // Pull fresh AEMET data ourselves so the widget updates even if the app
+        // hasn't been opened; falls back to the stored snapshot on any failure.
+        let e = await freshEntry(for: loc)
+        // Next refresh follows the user's chosen cadence (Ajustes · 1/3/6/12 h).
+        let next = Date().addingTimeInterval(WidgetStore.loadRefreshInterval().seconds)
         return Timeline(entries: [e], policy: .after(next))
     }
 
+    /// Snapshot/placeholder path: read whatever's already in the store (no network).
     private func entry(for configuration: SelectLocationIntent) -> WeatherEntry {
         let loc = resolveWidgetLocation(configuration)
         let aemet = WidgetStore.loadAemet(code: loc.code) ?? WidgetStore.loadAemet()
         // The Netatmo sensor belongs to one physical place — show it only on its own town.
         let all = WidgetStore.loadNetatmo()
         let netatmo = stationMatches(all, loc) ? all : nil
+        return WeatherEntry(date: Date(), netatmo: netatmo, aemet: aemet)
+    }
+
+    /// Timeline path: try a live AEMET fetch for the configured city, write it back
+    /// to the shared store (so the app and sibling widgets benefit), and fall back to
+    /// the stored snapshot when offline / rate-limited. Netatmo + the AEMET warning
+    /// badge are carried over from the stored snapshot (the widget can't fetch those).
+    private func freshEntry(for loc: SavedLocation) async -> WeatherEntry {
+        let stored = WidgetStore.loadAemet(code: loc.code) ?? WidgetStore.loadAemet()
+        let all = WidgetStore.loadNetatmo()
+        let netatmo = stationMatches(all, loc) ? all : nil
+
+        var aemet = stored
+        if (WidgetStore.loadAemetApiKey() ?? "").isEmpty == false {
+            // 30-min disk cache: a timeline rebuild within the window reuses it,
+            // so we don't hammer AEMET's rate-limited API on every WidgetKit poll.
+            async let d = try? await AEMETService.shared.forecastDaily(municipio: loc.code, maxAge: 30 * 60)
+            async let h = try? await AEMETService.shared.forecastHourly(municipio: loc.code, maxAge: 30 * 60)
+            let (dr, hr) = await (d, h)
+            if dr != nil || hr != nil {
+                let fresh = AemetSnapshotBuilder.makeAemetSnapshot(
+                    municipio: loc.name, daily: dr, hourly: hr, alert: stored?.alert)
+                WidgetStore.save(aemet: fresh, forCode: loc.code)
+                aemet = fresh
+            }
+        }
         return WeatherEntry(date: Date(), netatmo: netatmo, aemet: aemet)
     }
 
@@ -358,11 +388,15 @@ struct WeatherWidgetView: View {
                 .foregroundStyle(.white, SkyIcon.color(for: d.skyCode))
                 .frame(width: 24)
             if let p = d.prob, p > 0 {
+                // Draw the drop + "%" at natural width so "100%" (a digit wider) never
+                // gets an ellipsis; the fixed 48pt slot keeps the columns aligned.
                 Label("\(p)%", systemImage: "drop.fill")
                     .font(.caption2).foregroundStyle(WidgetTheme.greenBright)
-                    .labelStyle(.titleAndIcon).frame(width: 44, alignment: .leading)
+                    .labelStyle(.titleAndIcon)
+                    .lineLimit(1).fixedSize()
+                    .frame(width: 48, alignment: .leading)
             } else {
-                Spacer().frame(width: 44)
+                Spacer().frame(width: 48)
             }
             Text(d.tempMin.map { "\($0)°" } ?? "—")
                 .font(.subheadline).foregroundStyle(.white.opacity(0.7))

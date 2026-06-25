@@ -43,6 +43,9 @@
 		FACE00000000000000000040 /* WidgetConfigIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = FACE0000000000000000003A /* WidgetConfigIntent.swift */; };
 		FACE00000000000000000051 /* TidesService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FACE00000000000000000050 /* TidesService.swift */; };
 		FACE00000000000000000053 /* TidesWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = FACE00000000000000000052 /* TidesWidget.swift */; };
+		FACE00000000000000000061 /* AEMETService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FACE00000000000000000060 /* AEMETService.swift */; };
+		FACE00000000000000000063 /* AemetSnapshotBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = FACE00000000000000000062 /* AemetSnapshotBuilder.swift */; };
+		FACE00000000000000000064 /* AemetSnapshotBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = FACE00000000000000000062 /* AemetSnapshotBuilder.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -58,6 +61,8 @@
 		FACE00000000000000000050 /* TidesService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TidesService.swift; path = AppPersonal/TidesService.swift; sourceTree = SOURCE_ROOT; };
 		FACE00000000000000000052 /* TidesWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TidesWidget.swift; sourceTree = "<group>"; };
 		159C61582FC463B20082CE49 /* AppPersonal.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AppPersonal.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		FACE00000000000000000060 /* AEMETService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AEMETService.swift; path = AppPersonal/AEMETService.swift; sourceTree = SOURCE_ROOT; };
+		FACE00000000000000000062 /* AemetSnapshotBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AemetSnapshotBuilder.swift; path = Shared/AemetSnapshotBuilder.swift; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -122,6 +127,7 @@
 			isa = PBXGroup;
 			children = (
 				FACE00000000000000000002 /* WidgetShared.swift */,
+				FACE00000000000000000062 /* AemetSnapshotBuilder.swift */,
 			);
 			name = Shared;
 			sourceTree = "<group>";
@@ -231,6 +237,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				FACE0000000000000000000B /* WidgetShared.swift in Sources */,
+				FACE00000000000000000063 /* AemetSnapshotBuilder.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -248,6 +255,8 @@
 				FACE0000000000000000000E /* MoonPhasesService.swift in Sources */,
 				FACE00000000000000000051 /* TidesService.swift in Sources */,
 				FACE00000000000000000053 /* TidesWidget.swift in Sources */,
+				FACE00000000000000000061 /* AEMETService.swift in Sources */,
+				FACE00000000000000000064 /* AemetSnapshotBuilder.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -395,6 +404,7 @@
 				DEVELOPMENT_TEAM = JKMR84FU58;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Info.plist;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "AppPersonal usa tu ubicación solo cuando pulsas el botón de localizar, para seleccionar la estación meteorológica y el municipio más cercanos. No se comparte ni almacena.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -430,6 +440,7 @@
 				DEVELOPMENT_TEAM = JKMR84FU58;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Info.plist;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "AppPersonal usa tu ubicación solo cuando pulsas el botón de localizar, para seleccionar la estación meteorológica y el municipio más cercanos. No se comparte ni almacena.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;

@@ -19,7 +19,19 @@ class AppConfiguration: ObservableObject {
     @Published var stationLocation: String      { didSet { ud.set(stationLocation,      forKey: "station_location") } }
 
     // MARK: - AEMET
-    @Published var aemetApiKey: String          { didSet { ud.set(aemetApiKey,          forKey: "aemet_api_key") } }
+    @Published var aemetApiKey: String          { didSet { ud.set(aemetApiKey, forKey: "aemet_api_key"); WidgetStore.saveAemetApiKey(aemetApiKey) } }
+
+    // MARK: - Background / widget refresh cadence
+    /// How often the app's background task and the widgets pull fresh data (in hours).
+    @Published var refreshIntervalHours: Int    {
+        didSet {
+            ud.set(refreshIntervalHours, forKey: "refresh_interval_hours")
+            WidgetStore.saveRefreshInterval(refreshInterval)
+            WidgetStore.reload()
+        }
+    }
+    /// Strongly-typed view of `refreshIntervalHours`.
+    var refreshInterval: RefreshInterval { RefreshInterval(rawValue: refreshIntervalHours) ?? .default }
 
     /// True while `autoDetectStation()` is fetching modules from Netatmo.
     @Published var isDetectingStation = false
@@ -116,5 +128,12 @@ class AppConfiguration: ObservableObject {
         moduleRain          = get("module_rain",           Defaults.moduleRain)
         stationLocation     = get("station_location",      Defaults.stationLoc)
         aemetApiKey         = get("aemet_api_key",         Defaults.aemetKey)
+        let storedInterval  = ud.object(forKey: "refresh_interval_hours") as? Int
+        refreshIntervalHours = storedInterval ?? RefreshInterval.default.rawValue
+
+        // Mirror values the widget extension needs into the shared App Group
+        // (init assignments above don't fire `didSet`).
+        WidgetStore.saveAemetApiKey(aemetApiKey)
+        WidgetStore.saveRefreshInterval(refreshInterval)
     }
 }
