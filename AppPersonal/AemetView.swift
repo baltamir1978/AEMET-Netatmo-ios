@@ -1,5 +1,4 @@
 import SwiftUI
-import CoreLocation
 import Charts
 
 struct AemetView: View {
@@ -987,22 +986,15 @@ struct AemetView: View {
         WidgetStore.reload()
     }
 
-    /// Build a widget snapshot from forecast roots (pure — works for any city).
+    /// Switch to the GPS "Ubicación actual" entry and load its forecast. `loadForecast`
+    /// calls `store.resolveCurrent()`, which takes a real async GPS fix and reverse-geocodes
+    /// it — the same path the widgets use. (The old code read `CLLocationManager.location`
+    /// synchronously right after creating the manager, which is almost always nil before a
+    /// fix lands, then fell back to the nearest *followed* city — hence it stuck on Madrid.)
     private func geolocate() {
-        let mgr = CLLocationManager()
-        mgr.requestWhenInUseAuthorization()
-        guard let loc = mgr.location else { return }
-        let coord = loc.coordinate
-        let nearest = store.locations.min(by: { a, b in
-            let da = pow(a.lat - coord.latitude, 2) + pow(a.lon - coord.longitude, 2)
-            let db = pow(b.lat - coord.latitude, 2) + pow(b.lon - coord.longitude, 2)
-            return da < db
-        })
-        if let n = nearest {
-            store.select(n.code)
-            searchText = ""
-            Task { await loadForecast() }
-        }
+        store.select(SavedLocation.currentCode)
+        searchText = ""
+        Task { await loadForecast() }
     }
 }
 
