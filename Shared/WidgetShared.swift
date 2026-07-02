@@ -19,6 +19,10 @@ struct SavedLocation: Codable, Identifiable, Equatable {
     var lon: Double
     var idema: String?        // AEMET observation station (optional)
     var tz: String = "Europe/Madrid"
+    /// Friendly observation-station name (only for the GPS "Ubicación actual" entry).
+    var stationName: String? = nil
+    /// Estimated km from the real GPS fix to that observation station (GPS entry only).
+    var stationDistanceKm: Double? = nil
 
     /// Bridge to the sun/moon engine.
     var sunMoon: SunMoonLocation {

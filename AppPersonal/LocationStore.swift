@@ -81,11 +81,14 @@ final class LocationStore: ObservableObject {
         // friendly label. The station name reliably yields "El Goloso"; the geocoded
         // city is the fallback, then the municipio.
         let station = await nearestStation(to: coord)
-        let displayName = station.map { Self.shortStationName($0.nombre) }
-            ?? cityName
-            ?? n.nombre
-        let loc = SavedLocation(code: n.codMunicipio, name: displayName, province: nil,
-                                lat: lat, lon: lon, idema: station?.indicativo)
+        // Show the *real* town as the primary name (geocoded city, else the municipio);
+        // the station is surfaced separately as context + its estimated distance.
+        let realPlace = cityName ?? n.nombre
+        let stationName = station.map { Self.shortStationName($0.0.nombre) }
+        let stationDist = station.map { distanceKm(coord, $0.1) }
+        let loc = SavedLocation(code: n.codMunicipio, name: realPlace, province: nil,
+                                lat: lat, lon: lon, idema: station?.0.indicativo,
+                                stationName: stationName, stationDistanceKm: stationDist)
         resolvedCurrent = loc
         WidgetStore.saveResolvedCurrent(loc)
         WidgetCenter.shared.reloadAllTimelines()
@@ -114,8 +117,8 @@ final class LocationStore: ObservableObject {
         return maestro.first { Self.normalize($0.nombre) == target && $0.lat != nil }
     }
 
-    /// The AEMET observation station nearest to `coord`, if any.
-    private func nearestStation(to coord: CLLocationCoordinate2D) async -> AemetStation? {
+    /// The AEMET observation station nearest to `coord` (with its coordinate), if any.
+    private func nearestStation(to coord: CLLocationCoordinate2D) async -> (AemetStation, CLLocationCoordinate2D)? {
         if stations.isEmpty {
             stations = (try? await AEMETService.shared.allStations()) ?? []
         }
@@ -123,7 +126,14 @@ final class LocationStore: ObservableObject {
             guard let la = Self.sexagesimal(st.latitud), let lo = Self.sexagesimal(st.longitud) else { return nil }
             return (st, la, lo)
         }
-        return withCoords.min { sqDist(lat: $0.1, lon: $0.2, c: coord) < sqDist(lat: $1.1, lon: $1.2, c: coord) }?.0
+        guard let best = withCoords.min(by: { sqDist(lat: $0.1, lon: $0.2, c: coord) < sqDist(lat: $1.1, lon: $1.2, c: coord) }) else { return nil }
+        return (best.0, CLLocationCoordinate2D(latitude: best.1, longitude: best.2))
+    }
+
+    /// Great-circle distance between two coordinates, in kilometres.
+    private func distanceKm(_ a: CLLocationCoordinate2D, _ b: CLLocationCoordinate2D) -> Double {
+        CLLocation(latitude: a.latitude, longitude: a.longitude)
+            .distance(from: CLLocation(latitude: b.latitude, longitude: b.longitude)) / 1000
     }
 
     /// "MADRID, EL GOLOSO" → "El Goloso"; "MADRID/RETIRO" → "Retiro". Drops the leading

@@ -1,5 +1,6 @@
 import SwiftUI
 import Charts
+import CoreLocation
 
 struct AemetView: View {
     @ObservedObject private var store = LocationStore.shared
@@ -55,20 +56,28 @@ struct AemetView: View {
                 .padding(.horizontal, 16)
                 .padding(.top, 4)
             }
-            .navigationTitle(shortLocationName)
+            .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
+            // City switch + location manager live in one compact leading menu so the
+            // trailing refresh + GPS buttons always fit (a crowded bar silently drops
+            // trailing items on narrower screens / larger text).
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Picker("", selection: $store.selectedCode) {
-                        ForEach(store.pickerOptions) { loc in
-                            Text(loc.isCurrent ? store.currentDisplayName : loc.name).tag(loc.code)
+                    Menu {
+                        Picker("Ubicación", selection: $store.selectedCode) {
+                            ForEach(store.pickerOptions) { loc in
+                                Text(loc.isCurrent ? store.currentDisplayName : loc.name).tag(loc.code)
+                            }
                         }
-                    }
-                    .pickerStyle(.menu)
-                    .onChange(of: store.selectedCode) { _, newCode in
-                        store.select(newCode)
-                        searchText = ""
-                        Task { await loadForecast() }
+                        Divider()
+                        Button { showManage = true } label: {
+                            Label("Gestionar ubicaciones", systemImage: "list.bullet")
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text(shortLocationName).fontWeight(.semibold)
+                            Image(systemName: "chevron.down").font(.caption2)
+                        }
                     }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -85,11 +94,11 @@ struct AemetView: View {
                         Image(systemName: "location")
                     }
                 }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button { showManage = true } label: {
-                        Image(systemName: "list.bullet")
-                    }
-                }
+            }
+            .onChange(of: store.selectedCode) { _, newCode in
+                store.select(newCode)
+                searchText = ""
+                Task { await loadForecast() }
             }
             .task { await loadForecast() }
             .refreshable { await loadForecast(force: true) }
@@ -155,6 +164,7 @@ struct AemetView: View {
             .clipShape(RoundedRectangle(cornerRadius: 12))
         } else {
             nowCard()
+            currentLocationCard()
             hourlyCard()
             tempChartCard()
             airPollenUVCard()
@@ -224,6 +234,57 @@ struct AemetView: View {
         .background(AppTheme.heroGradient)
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .shadow(color: AppTheme.greenDeep.opacity(0.3), radius: 8, y: 4)
+    }
+
+    /// Shows the selected location's real name plus the AEMET observation station being
+    /// used and its estimated distance. Works for any location: the station name/coords
+    /// come from the live observation (`ubi`/`lat`/`lon`); for the GPS entry we prefer the
+    /// exact GPS→station distance captured at resolve time.
+    @ViewBuilder
+    private func currentLocationCard() -> some View {
+        let loc = store.selected
+        let stationName = obs?.last?.ubi.map { LocationStore.shortStationName($0) } ?? loc.stationName
+        if let station = stationName {
+            let km = stationDistanceKm(loc: loc)
+            HStack(spacing: 10) {
+                Image(systemName: loc.isCurrent ? "location.fill" : "mappin.circle.fill")
+                    .font(.subheadline).foregroundStyle(AppTheme.green)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(loc.name).font(.subheadline).fontWeight(.semibold)
+                    HStack(spacing: 4) {
+                        Image(systemName: "cloud.sun.fill").font(.caption2)
+                        Text(stationCaption(station, km: km))
+                            .font(.caption)
+                    }
+                    .foregroundStyle(.secondary)
+                }
+                Spacer()
+            }
+            .padding(.horizontal, 16).padding(.vertical, 12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.background)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .shadow(color: .black.opacity(0.05), radius: 4, y: 2)
+        }
+    }
+
+    /// Estimated km from the selected location to the observation station. Prefers the
+    /// GPS-resolved distance (current entry); otherwise measures the location coords to
+    /// the station coords carried by the live observation.
+    private func stationDistanceKm(loc: SavedLocation) -> Double? {
+        if loc.isCurrent, let d = loc.stationDistanceKm { return d }
+        guard let sla = obs?.last?.lat, let slo = obs?.last?.lon else { return loc.stationDistanceKm }
+        let a = CLLocation(latitude: loc.lat, longitude: loc.lon)
+        let b = CLLocation(latitude: sla, longitude: slo)
+        return a.distance(from: b) / 1000
+    }
+
+    /// "Estación El Goloso · a 3,2 km" (comma decimals, es-ES); drops the distance if unknown.
+    private func stationCaption(_ station: String, km: Double?) -> String {
+        guard let km else { return "Estación \(station)" }
+        let digits = km < 10 ? 1 : 0
+        let value = String(format: "%.\(digits)f", km).replacingOccurrences(of: ".", with: ",")
+        return "Estación \(station) · a \(value) km"
     }
 
     /// Right-column readout in the hero card: emoji + value over a faint caption.
