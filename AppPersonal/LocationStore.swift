@@ -172,6 +172,26 @@ final class LocationStore: ObservableObject {
         return (hemi == "S" || hemi == "W" || hemi == "O") ? -dec : dec
     }
 
+    /// Resolve and attach the nearest AEMET observation station to a followed location
+    /// that lacks one (e.g. added via search with `idema: nil`), so the AEMET tab can
+    /// fetch live readings — humidity, wind, real current temperature — for it too.
+    /// Persists the enriched location and returns its `idema` (nil if none could be found).
+    @discardableResult
+    func attachNearestStation(toCode code: String) async -> String? {
+        guard let idx = locations.firstIndex(where: { $0.code == code }) else { return nil }
+        if let existing = locations[idx].idema { return existing }   // already resolved
+        let loc = locations[idx]
+        let coord = CLLocationCoordinate2D(latitude: loc.lat, longitude: loc.lon)
+        guard let (station, stationCoord) = await nearestStation(to: coord) else { return nil }
+        // The index may have shifted while we awaited the station catalog.
+        guard let i = locations.firstIndex(where: { $0.code == code }) else { return nil }
+        locations[i].idema = station.indicativo
+        locations[i].stationName = Self.shortStationName(station.nombre)
+        locations[i].stationDistanceKm = distanceKm(coord, stationCoord)
+        persist()
+        return station.indicativo
+    }
+
     /// Add (or update) a location and select it.
     func add(_ loc: SavedLocation) {
         if let i = locations.firstIndex(where: { $0.code == loc.code }) {

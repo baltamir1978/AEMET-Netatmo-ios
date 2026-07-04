@@ -197,7 +197,10 @@ struct AemetView: View {
         let today = AemetSnapshotBuilder.upcomingDays(daily).first
         let hourlyDay = hourly?.prediccion?.dia?.first
         let lastObs = obs?.last
-        let currentTemp = lastObs?.ta
+        // Big number: prefer a *fresh* station reading; otherwise the current-hour forecast
+        // (exactly what the hourly strip below shows) — never the daily max, which used to be
+        // the fallback and could sit >7° above the actual current temperature.
+        let currentTemp = freshObsTemp(lastObs) ?? buildHourlyEntries().first?.temp ?? lastObs?.ta
         let tMax = today?.temperatura?.maxima
         let tMin = today?.temperatura?.minima
         let nowHour = Calendar.current.component(.hour, from: Date())
@@ -285,6 +288,31 @@ struct AemetView: View {
         let digits = km < 10 ? 1 : 0
         let value = String(format: "%.\(digits)f", km).replacingOccurrences(of: ".", with: ",")
         return "Estación \(station) · a \(value) km"
+    }
+
+    /// Station temperature only when the reading is recent enough to trust as "now".
+    /// AEMET's observation cache can be a few hours old (and the network publish lags),
+    /// so a stale `ta` may sit far from the real current temperature — in that case we
+    /// fall back to the current-hour forecast instead. Returns nil when unknown/stale.
+    private func freshObsTemp(_ record: AemetObservationRecord?) -> Double? {
+        guard let record, let ta = record.ta,
+              let fint = record.fint,
+              let date = Self.parseObsDate(fint) else { return nil }
+        return Date().timeIntervalSince(date) <= 2 * 60 * 60 ? ta : nil
+    }
+
+    /// AEMET observation timestamps arrive without a timezone offset
+    /// (e.g. "2026-07-04T09:00:00", UTC), which `ISO8601DateFormatter` rejects by default.
+    /// Try the offset-less UTC form first, then the standard internet date-time.
+    private static let obsUTCFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone(identifier: "UTC")
+        f.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
+        return f
+    }()
+    private static func parseObsDate(_ s: String) -> Date? {
+        obsUTCFormatter.date(from: s) ?? ISO8601DateFormatter().date(from: s)
     }
 
     /// Right-column readout in the hero card: emoji + value over a faint caption.
@@ -935,7 +963,13 @@ struct AemetView: View {
             Task { await refreshCurrentLocationForWidget() }
         }
         let municipio = currentMunicipio
-        let idema = locationIdema
+        // A city added via search has no observation station yet (idema: nil), so it would
+        // show no humidity/wind and no real current temperature. Resolve the nearest station
+        // once (persisted), so this and every later load fetches live readings for it too.
+        var idema = locationIdema
+        if idema == nil, store.selectedCode != SavedLocation.currentCode {
+            idema = await store.attachNearestStation(toCode: municipio)
+        }
 
         // All calls run in parallel
         async let dResult = AEMETService.shared.forecastDaily(municipio: municipio, maxAge: maxAge)
