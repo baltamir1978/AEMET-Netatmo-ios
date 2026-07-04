@@ -208,8 +208,11 @@ struct AemetView: View {
             ?? hourlyDay?.estadoCielo?.first?.value
         let skyDesc = hourlyDay?.estadoCielo?.first(where: { Int($0.periodo ?? "") == nowHour })?.descripcion
             ?? hourlyDay?.estadoCielo?.first?.descripcion ?? "—"
-        let windKmh = lastObs?.vv.map { Int($0 * 3.6) }
-        let gustKmh = lastObs?.vmax.map { Int($0 * 3.6) }
+        // Per-field lookups (not lastObs.*): the newest record often lacks humidity/wind.
+        let humidity = latestObs(\.hr)
+        let windKmh = latestObs(\.vv).map { Int($0 * 3.6) }
+        let gustKmh = latestObs(\.vmax).map { Int($0 * 3.6) }
+        let rain1h = latestObs(\.prec)
 
         return HStack(alignment: .top, spacing: 16) {
             WeatherIconView(code: skyCode).frame(width: 60, height: 60)
@@ -226,11 +229,11 @@ struct AemetView: View {
             Spacer(minLength: 8)
             // Right column fills the previously-empty space with the live readings.
             VStack(alignment: .trailing, spacing: 7) {
-                if let hum = lastObs?.hr { heroStat("💧", "\(Int(hum))%", "Humedad") }
+                if let hum = humidity { heroStat("💧", "\(Int(hum))%", "Humedad") }
                 if let w = windKmh {
                     heroStat("💨", "\(w) km/h", (gustKmh.map { $0 > 0 ? "racha \($0)" : "Viento" }) ?? "Viento")
                 }
-                if let rain = lastObs?.prec, rain > 0 { heroStat("🌧", "\(rain) L/m²", "Lluvia 1h") }
+                if let rain = rain1h, rain > 0 { heroStat("🌧", "\(rain) L/m²", "Lluvia 1h") }
             }
         }
         .frame(maxWidth: .infinity).padding(16)
@@ -299,6 +302,15 @@ struct AemetView: View {
               let fint = record.fint,
               let date = Self.parseObsDate(fint) else { return nil }
         return Date().timeIntervalSince(date) <= 2 * 60 * 60 ? ta : nil
+    }
+
+    /// Most recent non-nil value for an observation field, scanning back from the newest
+    /// record. AEMET publishes a station's sensors on different cycles, so its latest hourly
+    /// record frequently carries only `ta` (temperature) with `hr`/`vv`/`vmax`/`prec` still
+    /// null — `obs.last.hr` would then be nil and humidity/wind would vanish even though an
+    /// earlier record an hour ago has them. (Bug seen on "San Pablo de los Montes".)
+    private func latestObs<T>(_ keyPath: KeyPath<AemetObservationRecord, T?>) -> T? {
+        obs?.last(where: { $0[keyPath: keyPath] != nil })?[keyPath: keyPath]
     }
 
     /// AEMET observation timestamps arrive without a timezone offset
@@ -655,13 +667,15 @@ struct AemetView: View {
                     detailRow("T min/máx",
                               value: "\(lastObs.tamin.map { String(format: "%.1f°", $0) } ?? "—") / \(lastObs.tamax.map { String(format: "%.1f°", $0) } ?? "—")")
                 }
-                if let hr = lastObs.hr { detailRow("Humedad", value: "\(Int(hr))%") }
-                if let pres = lastObs.pres { detailRow("Presión", value: "\(pres) hPa") }
-                if let vv = lastObs.vv { detailRow("Viento", value: String(format: "%d km/h", Int(vv * 3.6))) }
-                if let vmax = lastObs.vmax, vmax > 0 {
+                // Per-field lookups so a sensor missing from the newest record still shows
+                // its last reported value instead of dropping the whole row.
+                if let hr = latestObs(\.hr) { detailRow("Humedad", value: "\(Int(hr))%") }
+                if let pres = latestObs(\.pres) { detailRow("Presión", value: "\(pres) hPa") }
+                if let vv = latestObs(\.vv) { detailRow("Viento", value: String(format: "%d km/h", Int(vv * 3.6))) }
+                if let vmax = latestObs(\.vmax), vmax > 0 {
                     detailRow("Racha máxima", value: String(format: "%d km/h", Int(vmax * 3.6)))
                 }
-                if let prec = lastObs.prec, prec > 0 {
+                if let prec = latestObs(\.prec), prec > 0 {
                     detailRow("Precipitación (1h)", value: "\(prec) L/m²")
                 }
             }
