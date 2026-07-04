@@ -127,6 +127,45 @@ struct AEMETService {
         return try await fetchJSON(dataURL)
     }
 
+    /// Stations that actually publish real-time observations (idema + decimal coords),
+    /// derived from the live network `observacion/convencional/todas`. Unlike
+    /// `allStations()` (the *climatological* inventory), this excludes stations that never
+    /// report hourly data — e.g. San Pablo de los Montes (3298X), whose data endpoint 404s —
+    /// so the nearest match to a coordinate always has humidity/wind. The set of reporting
+    /// stations barely changes, so the payload is disk-cached (~24 h by default).
+    func observationStations(maxAge: TimeInterval = 24 * 60 * 60) async throws -> [AemetLiveStation] {
+        let key = "obs_stations"
+        let cached = AemetDiskCache.load(key)
+        if let c = cached, c.age < maxAge,
+           let recs = try? JSONDecoder().decode([AemetObservationRecord].self, from: c.data) {
+            return Self.dedupeStations(recs)
+        }
+        do {
+            let dataURL = try await fetchDataURL("\(base)/observacion/convencional/todas")
+            let raw = try await fetchRaw(dataURL)
+            let recs = try JSONDecoder().decode([AemetObservationRecord].self, from: raw)
+            AemetDiskCache.save(key, data: raw)
+            return Self.dedupeStations(recs)
+        } catch {
+            if let c = cached,
+               let recs = try? JSONDecoder().decode([AemetObservationRecord].self, from: c.data) {
+                return Self.dedupeStations(recs)
+            }
+            throw error
+        }
+    }
+
+    /// One entry per station (first record wins; a station repeats its coords across its
+    /// hourly records), keeping only those with a usable idema and decimal position.
+    private static func dedupeStations(_ recs: [AemetObservationRecord]) -> [AemetLiveStation] {
+        var byId: [String: AemetLiveStation] = [:]
+        for r in recs {
+            guard let id = r.idema, let la = r.lat, let lo = r.lon, byId[id] == nil else { continue }
+            byId[id] = AemetLiveStation(indicativo: id, nombre: r.ubi ?? id, lat: la, lon: lo)
+        }
+        return Array(byId.values)
+    }
+
     // MARK: - Private helpers
 
     func fetchDataURL(_ path: String) async throws -> URL {
@@ -374,6 +413,7 @@ struct AemetOrigen: Decodable {
 // MARK: - Observation
 
 struct AemetObservationRecord: Decodable {
+    let idema: String?
     let fint: String?
     let ta: Double?
     let hr: Double?
@@ -431,4 +471,13 @@ struct AemetStation: Decodable, Identifiable {
     let longitud: String?
     let altitud: String?
     let provincia: String?
+}
+
+/// A real-time observation station (decimal coords) distilled from the live network.
+/// Mirrors the fields `LocationStore.nearestStation` needs from `AemetStation`.
+struct AemetLiveStation {
+    let indicativo: String
+    let nombre: String
+    let lat: Double
+    let lon: Double
 }

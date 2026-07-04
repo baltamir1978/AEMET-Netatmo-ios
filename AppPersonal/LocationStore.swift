@@ -16,7 +16,7 @@ final class LocationStore: ObservableObject {
     @Published private(set) var resolvedCurrent: SavedLocation?
 
     private var maestro: [AemetMunicipio] = []
-    private var stations: [AemetStation] = []
+    private var stations: [AemetLiveStation] = []
 
     /// Options shown in the location pickers: GPS entry first, then the saved list.
     var pickerOptions: [SavedLocation] { [SavedLocation.current] + locations }
@@ -118,16 +118,17 @@ final class LocationStore: ObservableObject {
     }
 
     /// The AEMET observation station nearest to `coord` (with its coordinate), if any.
-    private func nearestStation(to coord: CLLocationCoordinate2D) async -> (AemetStation, CLLocationCoordinate2D)? {
+    private func nearestStation(to coord: CLLocationCoordinate2D) async -> (AemetLiveStation, CLLocationCoordinate2D)? {
         if stations.isEmpty {
-            stations = (try? await AEMETService.shared.allStations()) ?? []
+            // Only stations that publish live observations — the climatological inventory
+            // (`allStations`) also lists stations that never report hourly data (e.g. San
+            // Pablo de los Montes, 3298X → 404), which would leave humidity/wind blank.
+            stations = (try? await AEMETService.shared.observationStations()) ?? []
         }
-        let withCoords = stations.compactMap { st -> (AemetStation, Double, Double)? in
-            guard let la = Self.sexagesimal(st.latitud), let lo = Self.sexagesimal(st.longitud) else { return nil }
-            return (st, la, lo)
-        }
-        guard let best = withCoords.min(by: { sqDist(lat: $0.1, lon: $0.2, c: coord) < sqDist(lat: $1.1, lon: $1.2, c: coord) }) else { return nil }
-        return (best.0, CLLocationCoordinate2D(latitude: best.1, longitude: best.2))
+        guard let best = stations.min(by: {
+            sqDist(lat: $0.lat, lon: $0.lon, c: coord) < sqDist(lat: $1.lat, lon: $1.lon, c: coord)
+        }) else { return nil }
+        return (best, CLLocationCoordinate2D(latitude: best.lat, longitude: best.lon))
     }
 
     /// Great-circle distance between two coordinates, in kilometres.
