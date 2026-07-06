@@ -372,6 +372,13 @@ struct AemetPeriodValue: Decodable {
     }
 
     private enum CodingKeys: String, CodingKey { case periodo, value, descripcion }
+
+    // Direct constructor (used to synthesize forecasts from the Open-Meteo fallback).
+    init(periodo: String?, value: String?, descripcion: String? = nil) {
+        self.periodo = periodo
+        self.value = value
+        self.descripcion = descripcion
+    }
 }
 
 struct AemetWindEntry: Decodable {
@@ -394,6 +401,13 @@ struct AemetWindEntry: Decodable {
     }
 
     private enum CodingKeys: String, CodingKey { case periodo, velocidad, direccion }
+
+    // Direct constructor (used to synthesize forecasts from the Open-Meteo fallback).
+    init(periodo: String?, velocidad: String?, direccion: String?) {
+        self.periodo = periodo
+        self.velocidad = velocidad
+        self.direccion = direccion
+    }
 }
 
 struct AemetMinMax: Decodable {
@@ -434,6 +448,16 @@ struct AemetObservationRecord: Decodable {
     let ubi: String?
     let tamin: Double?
     let tamax: Double?
+
+    /// Synthetic "current conditions" record for the Open-Meteo fallback (which has no
+    /// physical station). Carries only the fields the hero card reads; the rest are nil.
+    init(fint: String?, ta: Double?, hr: Double?, vv: Double?, vmax: Double?, prec: Double?) {
+        self.idema = nil; self.fint = fint; self.ta = ta; self.hr = hr; self.prec = prec
+        self.vv = vv; self.vmax = vmax; self.dv = nil; self.dmax = nil; self.pres = nil
+        self.tpr = nil; self.vis = nil; self.inso = nil; self.tss5cm = nil; self.tss20cm = nil
+        self.alt = nil; self.lat = nil; self.lon = nil; self.ubi = nil
+        self.tamin = nil; self.tamax = nil
+    }
 }
 
 // MARK: - Catalog

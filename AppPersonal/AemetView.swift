@@ -34,6 +34,8 @@ struct AemetView: View {
     private var locationIdema: String? { store.selected.idema }
     private var currentMunicipio: String { store.selected.code }
     private var hasData: Bool { daily != nil || hourly != nil || obs != nil }
+    /// False when running on the keyless Open-Meteo fallback (no AEMET station data).
+    private var aemetConfigured: Bool { AppConfiguration.shared.isAemetConfigured }
 
     /// Coordinates of the selected location (used for Open-Meteo air/pollen/UV).
     private var coords: (lat: Double, lon: Double)? {
@@ -164,13 +166,15 @@ struct AemetView: View {
             .clipShape(RoundedRectangle(cornerRadius: 12))
         } else {
             nowCard()
-            currentLocationCard()
+            // Station cards need a real AEMET observation station; the Open-Meteo fallback
+            // has none (its readings are modelled, not from a physical station).
+            if aemetConfigured { currentLocationCard() }
             hourlyCard()
             tempChartCard()
             airPollenUVCard()
             dailyCard()
             todayDetailsCard()
-            observationCard()
+            if aemetConfigured { observationCard() }
             sourceCard()
             updatedFooter()
         }
@@ -953,7 +957,11 @@ struct AemetView: View {
     // MARK: - Networking
 
     private func loadForecast(force: Bool = false) async {
-        guard AppConfiguration.shared.isAemetConfigured else { return }
+        // No AEMET key → serve the whole forecast from the open Open-Meteo API instead.
+        guard AppConfiguration.shared.isAemetConfigured else {
+            await loadOpenMeteoForecast()
+            return
+        }
         // Paint the last cached forecast synchronously (before any await) so the
         // screen keeps showing the previous data instead of flashing blank.
         if !hasData { primeFromCache() }
@@ -1027,6 +1035,37 @@ struct AemetView: View {
         } else {
             let detail = dailyErr ?? hourlyErr ?? "sin respuesta"
             loadError = "AEMET no disponible: \(detail)"
+        }
+        isLoading = false
+    }
+
+    /// Open-Meteo fallback used when there is no AEMET key. Fetches the open forecast and
+    /// feeds the same `daily`/`hourly`/`obs` the views read, so the UI is provider-agnostic.
+    private func loadOpenMeteoForecast() async {
+        isLoading = true
+        loadError = nil
+        // The current-location entry needs a GPS fix + name, but no AEMET catalog here.
+        if store.selectedCode == SavedLocation.currentCode {
+            _ = await store.resolveCurrentBasic()
+            if store.resolvedCurrent == nil {
+                loadError = "No se pudo obtener tu ubicación. Revisa los permisos de localización."
+                isLoading = false
+                return
+            }
+        }
+        guard let c = coords else { isLoading = false; return }
+        async let fcTask = OpenMeteoService.shared.fetchForecast(lat: c.lat, lon: c.lon)
+        async let omTask = OpenMeteoService.shared.fetch(lat: c.lat, lon: c.lon)
+        let forecast = await fcTask
+        openMeteo = await omTask ?? openMeteo
+        if let f = forecast {
+            daily = f.daily
+            hourly = f.hourly
+            obs = f.obs
+            lastLoadedAt = Date()
+            saveAemetSnapshot()
+        } else if daily == nil && hourly == nil {
+            loadError = "No se pudo cargar la previsión (Open-Meteo)."
         }
         isLoading = false
     }

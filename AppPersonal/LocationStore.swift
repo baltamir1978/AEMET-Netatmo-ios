@@ -95,6 +95,21 @@ final class LocationStore: ObservableObject {
         return true
     }
 
+    /// Resolve the GPS "Ubicación actual" without any AEMET catalog (used by the Open-Meteo
+    /// fallback when there is no AEMET key). Only needs the coordinate + a display name;
+    /// Open-Meteo is queried by lat/lon, so there is no municipio or station to look up.
+    @discardableResult
+    func resolveCurrentBasic() async -> Bool {
+        guard let coord = try? await CurrentLocationService.shared.currentCoordinate() else { return false }
+        let city = await reverseGeocodeCity(coord)
+        let loc = SavedLocation(code: SavedLocation.currentCode, name: city ?? "Ubicación actual",
+                                province: nil, lat: coord.latitude, lon: coord.longitude, idema: nil)
+        resolvedCurrent = loc
+        WidgetStore.saveResolvedCurrent(loc)
+        WidgetCenter.shared.reloadAllTimelines()
+        return true
+    }
+
     /// Reverse-geocode a coordinate to its city/town name (e.g. "Madrid"), Spanish locale.
     /// Uses MapKit's MKReverseGeocodingRequest (CLGeocoder is deprecated since iOS 26).
     private func reverseGeocodeCity(_ coord: CLLocationCoordinate2D) async -> String? {
