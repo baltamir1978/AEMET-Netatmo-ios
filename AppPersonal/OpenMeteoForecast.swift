@@ -193,7 +193,7 @@ extension OpenMeteoService {
         }
     }
 
-    private static func compass(_ deg: Double) -> String {
+    private nonisolated static func compass(_ deg: Double) -> String {
         let dirs = ["N", "NE", "E", "SE", "S", "SO", "O", "NO"]
         return dirs[Int((deg / 45).rounded()) % 8]
     }

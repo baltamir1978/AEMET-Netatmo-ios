@@ -5,6 +5,7 @@ import CoreLocation
 struct AemetView: View {
     @ObservedObject private var store = LocationStore.shared
     @State private var showManage = false
+    @State private var showStationPicker = false
     @State private var searchText = ""
     @State private var searchResults: [AemetMunicipio] = []
     @State private var cachedMunicipios: [AemetMunicipio] = []
@@ -89,12 +90,14 @@ struct AemetView: View {
                         Button { Task { await loadForecast(force: true) } } label: {
                             Image(systemName: "arrow.clockwise")
                         }
+                        .accessibilityLabel("Actualizar")
                     }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: geolocate) {
                         Image(systemName: "location")
                     }
+                    .accessibilityLabel("Usar mi ubicación")
                 }
             }
             .onChange(of: store.selectedCode) { _, newCode in
@@ -106,6 +109,17 @@ struct AemetView: View {
             .refreshable { await loadForecast(force: true) }
             .sheet(isPresented: $showManage) {
                 LocationManagerSheet { Task { await loadForecast() } }
+            }
+            .sheet(isPresented: $showStationPicker) {
+                let loc = store.selected
+                StationPickerSheet(code: loc.code,
+                                   coord: CLLocationCoordinate2D(latitude: loc.lat, longitude: loc.lon)) {
+                    // The pick changes which station we read: drop the old station's
+                    // readings so the hero falls back to the forecast rather than showing
+                    // the previous station's temperature while the new one loads.
+                    obs = nil
+                    Task { await loadForecast() }
+                }
             }
         }
     }
@@ -157,7 +171,7 @@ struct AemetView: View {
             VStack(spacing: 8) {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(.largeTitle).foregroundStyle(.orange)
-                Text("AEMET no disponible").font(.headline)
+                Text(aemetConfigured ? "AEMET no disponible" : "Tiempo no disponible").font(.headline)
                 Text("Inténtalo en unos minutos con ↻.")
                     .font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
             }
@@ -200,7 +214,9 @@ struct AemetView: View {
     private func nowCard() -> some View {
         let today = AemetSnapshotBuilder.upcomingDays(daily).first
         let hourlyDay = hourly?.prediccion?.dia?.first
-        let lastObs = obs?.last
+        // Newest record *with* a temperature — the very last one sometimes has `ta` null
+        // (same sensor-cycle quirk that `latestObs` works around for humidity/wind).
+        let lastObs = AemetSnapshotBuilder.latestTempRecord(obs)
         // Big number: prefer a *fresh* station reading; otherwise the current-hour forecast
         // (exactly what the hourly strip below shows) — never the daily max, which used to be
         // the fallback and could sit >7° above the actual current temperature.
@@ -225,8 +241,14 @@ struct AemetView: View {
                     .font(.system(size: 46, weight: .light)).foregroundStyle(.white)
                 Text(skyDesc).font(.subheadline).foregroundStyle(.white.opacity(0.9))
                 HStack(spacing: 8) {
-                    if let mx = tMax { Text("↑\(Int(mx.rounded()))°").foregroundStyle(.white) }
-                    if let mn = tMin { Text("↓\(Int(mn.rounded()))°").foregroundStyle(.white.opacity(0.7)) }
+                    if let mx = tMax {
+                        Text("↑\(Int(mx.rounded()))°").foregroundStyle(.white)
+                            .accessibilityLabel(Text("Máxima \(Int(mx.rounded())) grados"))
+                    }
+                    if let mn = tMin {
+                        Text("↓\(Int(mn.rounded()))°").foregroundStyle(.white.opacity(0.7))
+                            .accessibilityLabel(Text("Mínima \(Int(mn.rounded())) grados"))
+                    }
                 }
                 .font(.footnote)
             }
@@ -235,7 +257,7 @@ struct AemetView: View {
             VStack(alignment: .trailing, spacing: 7) {
                 if let hum = humidity { heroStat("💧", "\(Int(hum))%", "Humedad") }
                 if let w = windKmh {
-                    heroStat("💨", "\(w) km/h", (gustKmh.map { $0 > 0 ? "racha \($0)" : "Viento" }) ?? "Viento")
+                    heroStat("💨", "\(w) km/h", (gustKmh.map { $0 > 0 ? String(localized: "racha \($0)") : "Viento" }) ?? "Viento")
                 }
                 if let rain = rain1h, rain > 0 { heroStat("🌧", "\(rain) L/m²", "Lluvia 1h") }
             }
@@ -249,32 +271,50 @@ struct AemetView: View {
     /// Shows the selected location's real name plus the AEMET observation station being
     /// used and its estimated distance. Works for any location: the station name/coords
     /// come from the live observation (`ubi`/`lat`/`lon`); for the GPS entry we prefer the
-    /// exact GPS→station distance captured at resolve time.
+    /// exact GPS→station distance captured at resolve time. Tapping it opens the station
+    /// picker — the nearest station isn't always the most representative one.
     @ViewBuilder
     private func currentLocationCard() -> some View {
         let loc = store.selected
         let stationName = obs?.last?.ubi.map { LocationStore.shortStationName($0) } ?? loc.stationName
         if let station = stationName {
             let km = stationDistanceKm(loc: loc)
-            HStack(spacing: 10) {
-                Image(systemName: loc.isCurrent ? "location.fill" : "mappin.circle.fill")
-                    .font(.subheadline).foregroundStyle(AppTheme.green)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(loc.name).font(.subheadline).fontWeight(.semibold)
-                    HStack(spacing: 4) {
-                        Image(systemName: "cloud.sun.fill").font(.caption2)
-                        Text(stationCaption(station, km: km))
-                            .font(.caption)
+            Button {
+                showStationPicker = true
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: loc.isCurrent ? "location.fill" : "mappin.circle.fill")
+                        .font(.subheadline).foregroundStyle(AppTheme.green)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(loc.name).font(.subheadline).fontWeight(.semibold)
+                            .foregroundStyle(.primary)
+                        HStack(spacing: 4) {
+                            Image(systemName: "cloud.sun.fill").font(.caption2)
+                            Text(stationCaption(station, km: km))
+                                .font(.caption)
+                        }
+                        .foregroundStyle(.secondary)
                     }
-                    .foregroundStyle(.secondary)
+                    Spacer()
+                    // Only AEMET has an observation network to choose from; the Open-Meteo
+                    // fallback reads "current conditions" straight from the coordinate.
+                    if aemetConfigured {
+                        Image(systemName: "chevron.right").font(.caption2).foregroundStyle(.tertiary)
+                    }
                 }
-                Spacer()
+                .padding(.horizontal, 16).padding(.vertical, 12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(.background)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .shadow(color: .black.opacity(0.05), radius: 4, y: 2)
             }
-            .padding(.horizontal, 16).padding(.vertical, 12)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(.background)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            .shadow(color: .black.opacity(0.05), radius: 4, y: 2)
+            .buttonStyle(.plain)
+            .disabled(!aemetConfigured)
+            // A ternary of String literals would be a runtime String — verbatim, never
+            // localized. The `Text` overload keeps the literal in the catalog.
+            .accessibilityElement(children: .combine)
+            .accessibilityHint(aemetConfigured ? Text("Elegir la estación de observación")
+                                               : Text(verbatim: ""))
         }
     }
 
@@ -289,12 +329,12 @@ struct AemetView: View {
         return a.distance(from: b) / 1000
     }
 
-    /// "Estación El Goloso · a 3,2 km" (comma decimals, es-ES); drops the distance if unknown.
+    /// "Estación El Goloso · a 3,2 km"; drops the distance if unknown. Built with
+    /// `String(localized:)` — the station name is a runtime value, so a plain `Text(String)`
+    /// here would render verbatim and never hit the catalog.
     private func stationCaption(_ station: String, km: Double?) -> String {
-        guard let km else { return "Estación \(station)" }
-        let digits = km < 10 ? 1 : 0
-        let value = String(format: "%.\(digits)f", km).replacingOccurrences(of: ".", with: ",")
-        return "Estación \(station) · a \(value) km"
+        guard let km else { return String(localized: "Estación \(station)") }
+        return String(localized: "Estación \(station) · a \(StationFormat.km(km)) km")
     }
 
     /// Station temperature only when the reading is recent enough to trust as "now".
@@ -302,10 +342,7 @@ struct AemetView: View {
     /// so a stale `ta` may sit far from the real current temperature — in that case we
     /// fall back to the current-hour forecast instead. Returns nil when unknown/stale.
     private func freshObsTemp(_ record: AemetObservationRecord?) -> Double? {
-        guard let record, let ta = record.ta,
-              let fint = record.fint,
-              let date = Self.parseObsDate(fint) else { return nil }
-        return Date().timeIntervalSince(date) <= 2 * 60 * 60 ? ta : nil
+        AemetSnapshotBuilder.freshObsTemp(record)
     }
 
     /// Most recent non-nil value for an observation field, scanning back from the newest
@@ -333,23 +370,32 @@ struct AemetView: View {
 
     /// Right-column readout in the hero card: emoji + value over a faint caption.
     private func heroStat(_ icon: String, _ value: String, _ label: String) -> some View {
+        // `Text(String)` is verbatim; wrapping in LocalizedStringKey forces a catalog
+        // lookup so labels passed as runtime strings still translate.
         VStack(alignment: .trailing, spacing: 1) {
             HStack(spacing: 5) {
                 Text(icon).font(.subheadline)
                 Text(value).font(.title3).fontWeight(.bold).foregroundStyle(.white)
             }
-            Text(label).font(.caption).foregroundStyle(.white.opacity(0.7))
+            Text(LocalizedStringKey(label)).font(.caption).foregroundStyle(.white.opacity(0.7))
         }
+        // VoiceOver reads one phrase ("Humedad 45%") instead of an emoji glyph + digits.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(LocalizedStringKey(label)))
+        .accessibilityValue(Text(value))
     }
 
     private func miniStat(label: String, value: String) -> some View {
         VStack(spacing: 2) {
-            Text(label).font(.caption2).foregroundStyle(.white.opacity(0.75)).textCase(.uppercase)
+            Text(LocalizedStringKey(label)).font(.caption2).foregroundStyle(.white.opacity(0.75)).textCase(.uppercase)
             Text(value).font(.subheadline).fontWeight(.bold).foregroundStyle(.white)
         }
         .padding(.horizontal, 8).padding(.vertical, 6)
         .background(.white.opacity(0.12))
         .clipShape(RoundedRectangle(cornerRadius: 8))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(LocalizedStringKey(label)))
+        .accessibilityValue(Text(value))
     }
 
     // MARK: - Hourly card
@@ -439,7 +485,7 @@ struct AemetView: View {
             if let p = c.prob, p > 0 {
                 Text("💧\(p)%").font(.caption2).foregroundStyle(.blue)
             } else {
-                Text(" ").font(.caption2)
+                Text(verbatim: " ").font(.caption2)   // invisible spacer: keeps the cell height
             }
         }
         .padding(.vertical, 10).padding(.horizontal, 12)
@@ -757,14 +803,14 @@ struct AemetView: View {
     private func airBadge(title: String, value: String, subtitle: String, color: Color,
                           scale: String? = nil) -> some View {
         VStack(spacing: 2) {
-            Text(title).font(.caption2).foregroundStyle(.secondary).textCase(.uppercase)
+            Text(LocalizedStringKey(title)).font(.caption2).foregroundStyle(.secondary).textCase(.uppercase)
             HStack(alignment: .firstTextBaseline, spacing: 1) {
                 Text(value).font(.system(size: 30, weight: .heavy)).foregroundStyle(color)
                 if let scale {
                     Text("/\(scale)").font(.caption).fontWeight(.semibold).foregroundStyle(color.opacity(0.65))
                 }
             }
-            Text(subtitle).font(.caption).fontWeight(.semibold).foregroundStyle(color)
+            Text(LocalizedStringKey(subtitle)).font(.caption).fontWeight(.semibold).foregroundStyle(color)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 12)
@@ -837,7 +883,10 @@ struct AemetView: View {
                         .font(.title3).foregroundStyle(.white)
                         .frame(width: 28)
                     VStack(alignment: .leading, spacing: 1) {
-                        Text("\(a.phenomenon) · nivel \(a.level.name)")
+                        // The colour name is its own catalog key ("amarillo"/"naranja"/"rojo"),
+                        // so resolve it to a String before interpolating it into the line.
+                        let level = String(localized: String.LocalizationValue(a.level.name))
+                        Text("\(a.phenomenon) · nivel \(level)")
                             .font(.subheadline.weight(.semibold)).foregroundStyle(.white)
                         if let win = alertWindow(a) {
                             Text(win).font(.caption).foregroundStyle(.white.opacity(0.9))
@@ -882,7 +931,7 @@ struct AemetView: View {
 
     private func detailRow(_ label: String, value: String) -> some View {
         HStack {
-            Text(label).foregroundStyle(.secondary)
+            Text(LocalizedStringKey(label)).foregroundStyle(.secondary)
             Spacer()
             Text(value).fontWeight(.bold)
         }
@@ -1087,7 +1136,7 @@ struct AemetView: View {
     /// Persist the selected city's AEMET forecast to the App Group (global key + keyed by code).
     private func saveAemetSnapshot() {
         let snap = AemetSnapshotBuilder.makeAemetSnapshot(municipio: locationName, daily: daily, hourly: hourly,
-                                          alert: alerts.first?.badge)
+                                          observation: obs, alert: alerts.first?.badge)
         WidgetStore.save(aemet: snap)                       // global (legacy / "follow app" fallback)
         WidgetStore.save(aemet: snap, forCode: currentMunicipio)
     }
@@ -1107,7 +1156,10 @@ struct AemetView: View {
         guard dr != nil || hr != nil else { return }
         let cityAlert = (try? await AEMETService.shared.alerts(
             municipioCode: loc.code, lat: loc.lat, lon: loc.lon, maxAge: aemetAlertTTL))?.first?.badge
-        let snap = AemetSnapshotBuilder.makeAemetSnapshot(municipio: loc.name, daily: dr, hourly: hr, alert: cityAlert)
+        var cityObs: [AemetObservationRecord]? = nil
+        if let id = loc.idema { cityObs = try? await AEMETService.shared.observation(idema: id, maxAge: aemetTTL) }
+        let snap = AemetSnapshotBuilder.makeAemetSnapshot(municipio: loc.name, daily: dr, hourly: hr,
+                                                          observation: cityObs, alert: cityAlert)
         WidgetStore.save(aemet: snap, forCode: loc.code)
         WidgetStore.reload()
     }
@@ -1128,7 +1180,10 @@ struct AemetView: View {
             guard dr != nil || hr != nil else { continue }
             let cityAlert = (try? await AEMETService.shared.alerts(
                 municipioCode: loc.code, lat: loc.lat, lon: loc.lon, maxAge: aemetAlertTTL))?.first?.badge
-            let snap = AemetSnapshotBuilder.makeAemetSnapshot(municipio: loc.name, daily: dr, hourly: hr, alert: cityAlert)
+            var cityObs: [AemetObservationRecord]? = nil
+            if let id = loc.idema { cityObs = try? await AEMETService.shared.observation(idema: id, maxAge: aemetTTL) }
+            let snap = AemetSnapshotBuilder.makeAemetSnapshot(municipio: loc.name, daily: dr, hourly: hr,
+                                                              observation: cityObs, alert: cityAlert)
             WidgetStore.save(aemet: snap, forCode: loc.code)
         }
         WidgetStore.reload()

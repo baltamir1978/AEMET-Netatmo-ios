@@ -59,7 +59,13 @@ final class LocationStore: ObservableObject {
         guard selectedCode != SavedLocation.currentCode else { return }   // already refreshed on-screen
         guard Date().timeIntervalSince(lastCurrentRefresh) > 10 * 60 else { return }
         lastCurrentRefresh = Date()
-        _ = await resolveCurrent()
+        // Without a key there is no municipio catalog nor station network to resolve
+        // against — Open-Meteo is queried straight from the coordinate.
+        if AppConfiguration.shared.isAemetConfigured {
+            _ = await resolveCurrent()
+        } else {
+            _ = await resolveCurrentBasic()
+        }
     }
 
     /// Fetch a GPS fix and resolve it to the AEMET municipio + observation station.
@@ -77,10 +83,10 @@ final class LocationStore: ObservableObject {
         let municipio = cityName.flatMap { matchMunicipio(named: $0) }
             ?? nearestMunicipio(to: coord)
         guard let n = municipio, let lat = n.lat, let lon = n.lon else { return false }
-        // Nearest observation station (real readings, e.g. "Madrid, El Goloso") + a
-        // friendly label. The station name reliably yields "El Goloso"; the geocoded
-        // city is the fallback, then the municipio.
-        let station = await nearestStation(to: coord)
+        // Observation station (real readings, e.g. "Madrid, El Goloso") + a friendly label:
+        // the one the user pinned for this municipio, else the nearest. The station name
+        // reliably yields "El Goloso"; the geocoded city is the fallback, then the municipio.
+        let station = await station(forCode: n.codMunicipio, near: coord)
         // Show the *real* town as the primary name (geocoded city, else the municipio);
         // the station is surfaced separately as context + its estimated distance.
         let realPlace = cityName ?? n.nombre
@@ -132,18 +138,95 @@ final class LocationStore: ObservableObject {
         return maestro.first { Self.normalize($0.nombre) == target && $0.lat != nil }
     }
 
-    /// The AEMET observation station nearest to `coord` (with its coordinate), if any.
-    private func nearestStation(to coord: CLLocationCoordinate2D) async -> (AemetLiveStation, CLLocationCoordinate2D)? {
+    /// The live observation network, fetched once per session (24 h disk cache underneath).
+    /// Only stations that publish live observations — the climatological inventory
+    /// (`allStations`) also lists stations that never report hourly data (e.g. San Pablo
+    /// de los Montes, 3298X → 404), which would leave humidity/wind blank.
+    private func loadStations() async {
         if stations.isEmpty {
-            // Only stations that publish live observations — the climatological inventory
-            // (`allStations`) also lists stations that never report hourly data (e.g. San
-            // Pablo de los Montes, 3298X → 404), which would leave humidity/wind blank.
             stations = (try? await AEMETService.shared.observationStations()) ?? []
         }
+    }
+
+    /// The AEMET observation station nearest to `coord` (with its coordinate), if any.
+    private func nearestStation(to coord: CLLocationCoordinate2D) async -> (AemetLiveStation, CLLocationCoordinate2D)? {
+        await loadStations()
         guard let best = stations.min(by: {
             sqDist(lat: $0.lat, lon: $0.lon, c: coord) < sqDist(lat: $1.lat, lon: $1.lon, c: coord)
         }) else { return nil }
         return (best, CLLocationCoordinate2D(latitude: best.lat, longitude: best.lon))
+    }
+
+    /// The station a location should use: the one pinned by the user for that municipio,
+    /// otherwise the nearest. Everything that resolves a station goes through here, so a
+    /// manual pick survives the GPS entry being rebuilt on every fix.
+    private func station(forCode code: String, near coord: CLLocationCoordinate2D) async -> (AemetLiveStation, CLLocationCoordinate2D)? {
+        await loadStations()
+        if let pinned = WidgetStore.stationOverride(forCode: code),
+           let s = stations.first(where: { $0.indicativo == pinned }) {
+            return (s, CLLocationCoordinate2D(latitude: s.lat, longitude: s.lon))
+        }
+        return await nearestStation(to: coord)
+    }
+
+    /// The observation stations closest to `coord`, nearest first, with their distance.
+    /// Feeds the station picker: when several sit at a similar distance only the user knows
+    /// which one actually shares their weather (same valley, same side of the sierra).
+    /// A handful is enough — past the 4th the stations are too far to be representative.
+    func nearbyStations(to coord: CLLocationCoordinate2D, limit: Int = 4) async -> [(station: AemetLiveStation, km: Double)] {
+        await loadStations()
+        return stations
+            .map { (station: $0, km: distanceKm(coord, CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lon))) }
+            .sorted { $0.km < $1.km }
+            .prefix(limit)
+            .map { $0 }
+    }
+
+    /// Pin `station` as the observation station for `code` — or pass nil to go back to
+    /// automatic (nearest). Updates the stored name/distance so the card, the widget
+    /// snapshots and the next observation fetch all follow the new station.
+    @discardableResult
+    func selectStation(_ station: AemetLiveStation?, forCode code: String) async -> Bool {
+        WidgetStore.saveStationOverride(station?.indicativo, forCode: code)
+        guard let base = coordinate(forCode: code) else { return false }
+        var chosen = station
+        if chosen == nil { chosen = await nearestStation(to: base)?.0 }   // back to automatic
+        guard let chosen else { return false }
+        let km = distanceKm(base, CLLocationCoordinate2D(latitude: chosen.lat, longitude: chosen.lon))
+        apply(station: chosen, km: km, toCode: code)
+        return true
+    }
+
+    /// The station currently pinned for `code` (nil when it's resolved automatically).
+    func pinnedStation(forCode code: String) -> String? {
+        WidgetStore.stationOverride(forCode: code)
+    }
+
+    /// Coordinates of a followed location — or of the resolved GPS entry, whose `code` is
+    /// the municipio it landed on.
+    func coordinate(forCode code: String) -> CLLocationCoordinate2D? {
+        let loc = locations.first { $0.code == code }
+            ?? (resolvedCurrent?.code == code ? resolvedCurrent : nil)
+        return loc.map { CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lon) }
+    }
+
+    /// Write a station onto every entry that uses `code` (a followed city, the GPS entry,
+    /// or both when GPS resolves to a town you also follow).
+    private func apply(station: AemetLiveStation, km: Double, toCode code: String) {
+        let name = Self.shortStationName(station.nombre)
+        if let i = locations.firstIndex(where: { $0.code == code }) {
+            locations[i].idema = station.indicativo
+            locations[i].stationName = name
+            locations[i].stationDistanceKm = km
+        }
+        if var cur = resolvedCurrent, cur.code == code {
+            cur.idema = station.indicativo
+            cur.stationName = name
+            cur.stationDistanceKm = km
+            resolvedCurrent = cur
+            WidgetStore.saveResolvedCurrent(cur)
+        }
+        persist()
     }
 
     /// Great-circle distance between two coordinates, in kilometres.
@@ -188,23 +271,21 @@ final class LocationStore: ObservableObject {
         return (hemi == "S" || hemi == "W" || hemi == "O") ? -dec : dec
     }
 
-    /// Resolve and attach the nearest AEMET observation station to a followed location
-    /// that lacks one (e.g. added via search with `idema: nil`), so the AEMET tab can
-    /// fetch live readings — humidity, wind, real current temperature — for it too.
-    /// Persists the enriched location and returns its `idema` (nil if none could be found).
+    /// Resolve and attach an AEMET observation station to a followed location that lacks
+    /// one (e.g. added via search with `idema: nil`), so the AEMET tab can fetch live
+    /// readings — humidity, wind, real current temperature — for it too. Honours a pinned
+    /// station, else takes the nearest. Persists the enriched location and returns its
+    /// `idema` (nil if none could be found).
     @discardableResult
     func attachNearestStation(toCode code: String) async -> String? {
         guard let idx = locations.firstIndex(where: { $0.code == code }) else { return nil }
         if let existing = locations[idx].idema { return existing }   // already resolved
         let loc = locations[idx]
         let coord = CLLocationCoordinate2D(latitude: loc.lat, longitude: loc.lon)
-        guard let (station, stationCoord) = await nearestStation(to: coord) else { return nil }
+        guard let (station, stationCoord) = await station(forCode: code, near: coord) else { return nil }
         // The index may have shifted while we awaited the station catalog.
-        guard let i = locations.firstIndex(where: { $0.code == code }) else { return nil }
-        locations[i].idema = station.indicativo
-        locations[i].stationName = Self.shortStationName(station.nombre)
-        locations[i].stationDistanceKm = distanceKm(coord, stationCoord)
-        persist()
+        guard locations.contains(where: { $0.code == code }) else { return nil }
+        apply(station: station, km: distanceKm(coord, stationCoord), toCode: code)
         return station.indicativo
     }
 

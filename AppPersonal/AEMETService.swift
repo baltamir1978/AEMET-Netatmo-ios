@@ -161,7 +161,7 @@ struct AEMETService {
         var byId: [String: AemetLiveStation] = [:]
         for r in recs {
             guard let id = r.idema, let la = r.lat, let lo = r.lon, byId[id] == nil else { continue }
-            byId[id] = AemetLiveStation(indicativo: id, nombre: r.ubi ?? id, lat: la, lon: lo)
+            byId[id] = AemetLiveStation(indicativo: id, nombre: r.ubi ?? id, lat: la, lon: lo, alt: r.alt)
         }
         return Array(byId.values)
     }
@@ -504,4 +504,7 @@ struct AemetLiveStation {
     let nombre: String
     let lat: Double
     let lon: Double
+    /// Station altitude in metres — the station picker shows it, since in mountain country
+    /// the nearest station can sit on the far side of a ridge (or 400 m below you).
+    let alt: Double?
 }

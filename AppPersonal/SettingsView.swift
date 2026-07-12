@@ -20,16 +20,23 @@ struct SettingsView: View {
 
     private var refreshSection: some View {
         Section {
-            Picker("Actualizar cada", selection: $cfg.refreshIntervalHours) {
-                ForEach(RefreshInterval.allCases) { interval in
-                    Text(interval.label).tag(interval.rawValue)
+            Picker("Actualización", selection: refreshBinding) {
+                ForEach(RefreshInterval.pickerCases) { interval in
+                    Text(interval.pickerLabel).tag(interval.rawValue)
                 }
             }
         } header: {
             Text("Actualización en segundo plano")
         } footer: {
-            Text("Cada cuánto la app y los widgets intentan traer datos nuevos. iOS puede espaciar las actualizaciones en segundo plano para ahorrar batería.")
+            Text("«Frecuente» refresca más a menudo; «Ahorro» gasta menos batería. iOS decide el momento exacto de las actualizaciones en segundo plano.")
         }
+    }
+
+    /// Maps the stored cadence onto the simplified pair so the picker always shows a
+    /// selection, and writes the chosen value back (gently migrating older values).
+    private var refreshBinding: Binding<Int> {
+        Binding(get: { cfg.refreshInterval.simplified.rawValue },
+                set: { cfg.refreshIntervalHours = $0 })
     }
 
     // MARK: - Netatmo OAuth credentials
@@ -111,6 +118,10 @@ struct SettingsView: View {
             Image(systemName: present ? "checkmark.circle.fill" : "xmark.circle")
                 .foregroundStyle(present ? .green : .gray)
         }
+        // Status is conveyed only by icon + colour otherwise.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label)
+        .accessibilityValue(present ? "detectado" : "no detectado")
     }
 
     // MARK: - AEMET

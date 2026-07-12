@@ -57,3 +57,31 @@ func resolveWidgetLocation(_ intent: SelectLocationIntent) -> SavedLocation {
         return WidgetStore.loadLocations().first { $0.code == code } ?? WidgetStore.selectedLocation()
     }
 }
+
+// MARK: - Netatmo widget style
+
+/// Background of the Netatmo widget: the app's green, or a colour driven by the outdoor
+/// temperature (deep blue near zero → violet at 40-45°). Offered as an option rather than
+/// imposed: the colour is striking, but it also makes the widget change look every few hours.
+enum NetatmoBackground: String, AppEnum {
+    case theme        // green, like the rest of the app
+    case temperature  // colour by outdoor temperature
+
+    static var typeDisplayRepresentation: TypeDisplayRepresentation { "Fondo" }
+
+    static var caseDisplayRepresentations: [NetatmoBackground: DisplayRepresentation] = [
+        .theme:       DisplayRepresentation(title: "Verde"),
+        .temperature: DisplayRepresentation(title: "Color según la temperatura"),
+    ]
+}
+
+/// Configuration intent for the Netatmo widget ("Editar widget" → Fondo).
+struct NetatmoStyleIntent: WidgetConfigurationIntent {
+    static var title: LocalizedStringResource = "Estación Netatmo"
+    static var description = IntentDescription("Elige si el fondo sigue el verde de la app o cambia con la temperatura exterior.")
+
+    @Parameter(title: "Fondo", default: .theme)
+    var background: NetatmoBackground
+
+    init() {}
+}

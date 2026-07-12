@@ -22,6 +22,7 @@ enum AemetSnapshotBuilder {
     static func makeAemetSnapshot(municipio: String,
                                   daily: AemetDailyRoot?,
                                   hourly: AemetHourlyRoot?,
+                                  observation: [AemetObservationRecord]? = nil,
                                   alert: AemetAlertBadge? = nil) -> AemetSnapshot {
         let today = upcomingDays(daily).first
         let hourlyDay = hourly?.prediccion?.dia?.first
@@ -31,13 +32,17 @@ enum AemetSnapshotBuilder {
         let skyDesc = hourlyDay?.estadoCielo?.first(where: { Int($0.periodo ?? "") == nowHour })?.descripcion
             ?? hourlyDay?.estadoCielo?.first?.descripcion ?? "—"
         let hourPts = hourPoints(from: hourly)
-        // Big-number temp: the forecast for the current hour, falling back to the first
-        // upcoming hour. AEMET sometimes prunes the current (partial) hour from dia[0],
-        // which left the exact-hour match nil and the widget showing "—".
-        let currentTemp: Int? = hourlyDay?.temperatura?
-            .first(where: { Int($0.periodo ?? "") == nowHour })?
-            .value.flatMap { Double($0) }.map { Int($0.rounded()) }
-            ?? hourPts.first?.temp
+        // Big-number temp: prefer the real station reading when it's recent enough to
+        // trust as "now" (mirrors the app's hero card), otherwise the forecast for the
+        // current hour, falling back to the first upcoming hour. AEMET sometimes prunes
+        // the current (partial) hour from dia[0], which left the exact-hour match nil and
+        // the widget showing "—".
+        let lastObs = latestTempRecord(observation)
+        let obsTemp: Int? = freshObsTemp(lastObs).map { Int($0.rounded()) }
+        let hourNowEntry = hourlyDay?.temperatura?.first(where: { Int($0.periodo ?? "") == nowHour })
+        let hourNowTemp: Int? = hourNowEntry?.value.flatMap { Double($0) }.map { Int($0.rounded()) }
+        let staleObsTemp: Int? = lastObs?.ta.map { Int($0.rounded()) }
+        let currentTemp: Int? = obsTemp ?? hourNowTemp ?? hourPts.first?.temp ?? staleObsTemp
 
         let isoFmt = ISO8601DateFormatter(); isoFmt.formatOptions = [.withFullDate]
         let dayPoints: [AemetDayPoint] = upcomingDays(daily).prefix(6).compactMap { day in
@@ -63,6 +68,39 @@ enum AemetSnapshotBuilder {
             daily: dayPoints.isEmpty ? nil : dayPoints,
             alert: alert
         )
+    }
+
+    /// Newest observation record that actually carries a temperature. AEMET publishes a
+    /// station's sensors on different cycles, so its latest hourly record can arrive with
+    /// `ta` still null while the record an hour earlier has it — `records.last` would then
+    /// leave the big number on the forecast instead of the real reading.
+    static func latestTempRecord(_ records: [AemetObservationRecord]?) -> AemetObservationRecord? {
+        records?.last(where: { $0.ta != nil })
+    }
+
+    /// Station temperature only when the reading is recent enough to trust as "now".
+    /// AEMET's observation cache can be a few hours old (and the network publish lags),
+    /// so a stale `ta` may sit far from the real current temperature — in that case the
+    /// caller falls back to the current-hour forecast instead. Returns nil when unknown/stale.
+    static func freshObsTemp(_ record: AemetObservationRecord?) -> Double? {
+        guard let record, let ta = record.ta,
+              let fint = record.fint,
+              let date = parseObsDate(fint) else { return nil }
+        return Date().timeIntervalSince(date) <= 2 * 60 * 60 ? ta : nil
+    }
+
+    /// AEMET observation timestamps arrive without a timezone offset
+    /// (e.g. "2026-07-04T09:00:00", UTC), which `ISO8601DateFormatter` rejects by default.
+    /// Try the offset-less UTC form first, then the standard internet date-time.
+    private static let obsUTCFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone(identifier: "UTC")
+        f.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
+        return f
+    }()
+    static func parseObsDate(_ s: String) -> Date? {
+        obsUTCFormatter.date(from: s) ?? ISO8601DateFormatter().date(from: s)
     }
 
     /// Next ~8 hours (within 48h) from an hourly root, for the widget strip.

@@ -114,7 +114,7 @@ struct ActualView: View {
 
     private func sectionHeader(_ title: String, timestamp: Int?) -> some View {
         HStack {
-            Text(title)
+            Text(LocalizedStringKey(title))
                 .font(.caption).fontWeight(.bold).textCase(.uppercase)
                 .foregroundStyle(.secondary).tracking(1.5)
             if let ts = timestamp {
@@ -159,22 +159,15 @@ struct ActualView: View {
             error = e.localizedDescription
         }
 
-        if station != nil {
-            let ext = exteriorValues
+        if let station {
             // The station physically lives in La Granja — tag the snapshot with its
-            // coords so a widget shows it only when configured for that town.
+            // coords so the weather widget shows it only when configured for that town.
             let st = LocationStore.shared.locations.first {
                 $0.name.lowercased().contains("granja")
             } ?? SavedLocation.defaults[0]
-            WidgetStore.save(netatmo: NetatmoSnapshot(
-                stationName: cfg.stationLocation,
-                temperature: ext["Temperature"] ?? nil,
-                humidity: ext["Humidity"] ?? nil,
-                pressure: ext["Pressure"] ?? nil,
-                date: Date(),
-                lat: st.lat,
-                lon: st.lon
-            ))
+            WidgetStore.save(netatmo: NetatmoSnapshotBuilder.make(
+                station: station, exterior: exteriorModule, rain: rainModule,
+                name: cfg.stationLocation, lat: st.lat, lon: st.lon))
         }
 
         isLoading = false
@@ -245,7 +238,7 @@ struct MetricCard: View {
                     .font(.system(size: 25, weight: .heavy)).foregroundStyle(color)
                 Text(unit).font(.caption2).foregroundStyle(.secondary)
             }
-            Text(label).font(.caption2).foregroundStyle(.secondary)
+            Text(LocalizedStringKey(label)).font(.caption2).foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 11).padding(.horizontal, 10)

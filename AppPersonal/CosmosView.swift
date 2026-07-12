@@ -14,18 +14,28 @@ struct CosmosView: View {
     @State private var selectedMoonDay: Date?
 
     /// Spanish, Monday-first calendar used by the moon mini-calendar.
-    private var esCal: Calendar {
+    /// Cached once — building a Calendar (and the formatters below) on every row while
+    /// the calendar/list scrolls was needless churn.
+    private static let esCal: Calendar = {
         var c = Calendar(identifier: .gregorian)
         c.locale = Locale(identifier: "es_ES")
         c.firstWeekday = 2
         return c
-    }
+    }()
+    private var esCal: Calendar { Self.esCal }
 
-    private var dateISO: String {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withFullDate]
-        return f.string(from: selectedDate)
+    private static let isoDayFmt: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter(); f.formatOptions = [.withFullDate]; return f
+    }()
+    private static func makeFmt(_ format: String) -> DateFormatter {
+        let f = DateFormatter(); f.locale = Locale(identifier: "es_ES"); f.dateFormat = format; return f
     }
+    private static let eventDateFmt = makeFmt("EEE d MMM yyyy")
+    private static let tideDayFmt   = makeFmt("EEEE d MMM")
+    private static let monthTitleFmt = makeFmt("MMMM yyyy")
+    private static let hhmmFmt      = makeFmt("HH:mm")
+
+    private var dateISO: String { Self.isoDayFmt.string(from: selectedDate) }
 
     /// The day the Sun·Moon card reflects: a tapped calendar day if any, else the picker date.
     private var activeDay: Date { selectedMoonDay ?? selectedDate }
@@ -114,7 +124,10 @@ struct CosmosView: View {
                 Text(data.moon.emoji).font(.system(size: 32))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(data.moon.phase).font(.subheadline).fontWeight(.semibold)
-                    Text("Iluminación \(Int((data.moon.illumination * 100).rounded()))%")
+                    // Percentage pre-formatted so the format key stays "Iluminación %@",
+                    // free of a literal "%" that would confuse the format specifier.
+                    let illum = "\(Int((data.moon.illumination * 100).rounded()))%"
+                    Text("Iluminación \(illum)")
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
@@ -140,10 +153,13 @@ struct CosmosView: View {
         VStack(spacing: 3) {
             Text(icon).font(.title3)
             Text(value).font(.subheadline).fontWeight(.bold).monospacedDigit()
-            Text(label).font(.caption2).foregroundStyle(.secondary)
+            Text(LocalizedStringKey(label)).font(.caption2).foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 10)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(LocalizedStringKey(label)))
+        .accessibilityValue(Text(value))
     }
 
     // MARK: - Moon phase detail row
@@ -154,14 +170,18 @@ struct CosmosView: View {
                                       to: cal.startOfDay(for: phase.datetime)).day ?? 0
         let relative: String
         switch days {
-        case 0:  relative = "Hoy"
-        case 1:  relative = "Mañana"
-        default: relative = "En \(days) días"
+        case ..<(-1): relative = String(localized: "Hace \(-days) días")
+        case -1:      relative = String(localized: "Ayer")
+        case 0:       relative = String(localized: "Hoy")
+        case 1:       relative = String(localized: "Mañana")
+        default:      relative = String(localized: "En \(days) días")
         }
         // Alternate row tint by phase kind (like the tides list): new = cool, full = warm.
+        // Past phases stay visible but greyed.
         let kindColor = phase.kind == .new
             ? Color(red: 0.93, green: 0.94, blue: 0.99)
             : Color(red: 1.0, green: 0.98, blue: 0.88)
+        let isPast = days < 0
         return HStack(spacing: 12) {
             Text(phase.emoji).font(.title2)
             VStack(alignment: .leading, spacing: 2) {
@@ -175,10 +195,11 @@ struct CosmosView: View {
             }
         }
         .padding(.horizontal, 12).padding(.vertical, 8)
-        .background(days == 0 ? AppTheme.greenSoft : kindColor)
+        .background(days == 0 ? AppTheme.greenSoft : (isPast ? Color(.systemGray6) : kindColor))
         .clipShape(RoundedRectangle(cornerRadius: 10))
         .overlay(RoundedRectangle(cornerRadius: 10)
             .stroke(days == 0 ? AppTheme.green.opacity(0.4) : Color.clear))
+        .opacity(isPast ? 0.6 : 1)
     }
 
     // MARK: - Moon mini-calendar
@@ -196,11 +217,13 @@ struct CosmosView: View {
             HStack {
                 Button { changeMonth(-1) } label: { Image(systemName: "chevron.left") }
                     .disabled(!canGoBack).opacity(canGoBack ? 1 : 0.3)
+                    .accessibilityLabel("Mes anterior")
                 Spacer()
                 Text(monthTitle(moonCalMonth))
                     .font(.subheadline).fontWeight(.semibold)
                 Spacer()
                 Button { changeMonth(1) } label: { Image(systemName: "chevron.right") }
+                    .accessibilityLabel("Mes siguiente")
             }
             .padding(.horizontal, 20).padding(.vertical, 10)
             Divider()
@@ -243,10 +266,16 @@ struct CosmosView: View {
         .shadow(color: .black.opacity(0.05), radius: 4, y: 2)
     }
 
+    /// A day strictly before today — used to grey out already-elapsed days of the month.
+    private func isPastDay(_ day: Date) -> Bool {
+        esCal.startOfDay(for: day) < esCal.startOfDay(for: Date())
+    }
+
     private func moonDayCell(_ day: Date, phase: MoonPhaseEvent?, astro: [AstroEvent]) -> some View {
         let isToday = esCal.isDateInToday(day)
         let isSelected = selectedMoonDay.map { esCal.isDate($0, inSameDayAs: day) } ?? false
         let hasEvent = phase != nil || !astro.isEmpty
+        let isPast = isPastDay(day)
         // Moon emoji takes the cell; an astro-only day shows its own emoji.
         let emoji = phase?.emoji ?? astro.first?.emoji ?? " "
         let tint: Color
@@ -267,6 +296,8 @@ struct CosmosView: View {
         .frame(maxWidth: .infinity).frame(height: 38)
         .background(isSelected ? AppTheme.greenSoft : tint)
         .clipShape(RoundedRectangle(cornerRadius: 6))
+        // Already-elapsed days of the month stay visible but greyed.
+        .opacity(isPast && !isSelected ? 0.4 : 1)
         // Dot hint when an astro event is hidden behind a moon emoji.
         .overlay(alignment: .topTrailing) {
             if phase != nil && !astro.isEmpty {
@@ -308,10 +339,7 @@ struct CosmosView: View {
     }
 
     private func monthTitle(_ date: Date) -> String {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "es_ES")
-        f.dateFormat = "MMMM yyyy"
-        return f.string(from: date).capitalized
+        Self.monthTitleFmt.string(from: date).capitalized
     }
 
     // MARK: - Tides card
@@ -361,7 +389,7 @@ struct CosmosView: View {
     private func tideRow(_ tide: Tide) -> some View {
         HStack(spacing: 10) {
             Text(tide.type == "pleamar" ? "🌊" : "🏖️").font(.body)
-            Text(tide.type == "pleamar" ? "Pleamar" : "Bajamar")
+            Text(LocalizedStringKey(tide.type == "pleamar" ? "Pleamar" : "Bajamar"))
                 .font(.subheadline).fontWeight(.semibold)
             Spacer()
             Text(tide.time).font(.subheadline).foregroundStyle(.secondary)
@@ -372,14 +400,17 @@ struct CosmosView: View {
                                            : Color(red: 1.0, green: 0.98, blue: 0.88))
         .padding(.horizontal, 12)
         .clipShape(RoundedRectangle(cornerRadius: 8))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(tide.type == "pleamar" ? "Pleamar" : "Bajamar") a las \(tide.time), \(String(format: "%.2f", tide.height)) metros")
     }
 
     // MARK: - Astro event detail row
 
     private func astroRow(_ event: AstroEvent) -> some View {
         let isToday = event.date == dateISO
+        let isPast = event.datetime < Calendar.current.startOfDay(for: Date())
         let soon = Calendar.current.date(byAdding: .day, value: 30, to: Date()) ?? Date()
-        let isSoon = event.datetime <= soon
+        let isSoon = !isPast && event.datetime <= soon
         return HStack(spacing: 10) {
             Text(event.emoji).font(.title2)
             VStack(alignment: .leading, spacing: 2) {
@@ -401,25 +432,18 @@ struct CosmosView: View {
         .clipShape(RoundedRectangle(cornerRadius: 10))
         .overlay(RoundedRectangle(cornerRadius: 10)
             .stroke(isToday ? Color.yellow : isSoon ? AppTheme.green.opacity(0.35) : Color.clear))
+        .opacity(isPast ? 0.6 : 1)
     }
 
     // MARK: - Helpers
 
     private func formatTideDay(_ iso: String) -> String {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withFullDate]
-        guard let date = f.date(from: iso) else { return iso }
-        let df = DateFormatter()
-        df.locale = Locale(identifier: "es_ES")
-        df.dateFormat = "EEEE d MMM"
-        return df.string(from: date).capitalized
+        guard let date = Self.isoDayFmt.date(from: iso) else { return iso }
+        return Self.tideDayFmt.string(from: date).capitalized
     }
 
     private func formatEventDate(_ date: Date) -> String {
-        let df = DateFormatter()
-        df.locale = Locale(identifier: "es_ES")
-        df.dateFormat = "EEE d MMM yyyy"
-        return df.string(from: date)
+        Self.eventDateFmt.string(from: date)
     }
 
     // MARK: - Data loading
@@ -458,9 +482,11 @@ struct CosmosView: View {
     }
 
     private func loadMoonPhases() {
-        // Show one year ahead in the mini-calendar (~25 phases/year; count is a safe cap).
+        // Start at the first of the selected month (not `selectedDate`) so the earlier,
+        // already-elapsed days of the current month still show their phase — greyed in
+        // the calendar — instead of appearing blank. One year ahead for the rest.
         let horizon = Calendar.current.date(byAdding: .year, value: 1, to: selectedDate) ?? selectedDate
-        moonPhases = MoonPhasesService.shared.nextPhases(from: selectedDate, count: 40)
+        moonPhases = MoonPhasesService.shared.nextPhases(from: startOfMonth(selectedDate), count: 44)
             .filter { $0.datetime <= horizon }
         moonCalMonth = startOfMonth(selectedDate)
         selectedMoonDay = nil
@@ -472,12 +498,14 @@ struct CosmosView: View {
     }
 
     private func loadAstroEvents() {
-        // One year ahead of astronomical events (~20-30/year; count is a safe cap).
+        // Start at the first of the selected month so past events of the current month
+        // stay visible (greyed) rather than vanishing. One year ahead for the rest.
+        let monthStart = startOfMonth(selectedDate)
         let horizon = Calendar.current.date(byAdding: .year, value: 1, to: selectedDate) ?? selectedDate
-        var events = AstroEventsService.shared.nextEvents(from: selectedDate, count: 60)
+        var events = AstroEventsService.shared.nextEvents(from: monthStart, count: 66)
         // Solar turning points (earliest/latest sunrise & sunset) for the selected place.
         events += SunMoonService.shared
-            .solarTurningPoints(location: store.selected.sunMoon, from: selectedDate, years: 1)
+            .solarTurningPoints(location: store.selected.sunMoon, from: monthStart, years: 1)
             .map { tp in
                 AstroEvent(label: tp.kind.label, emoji: tp.kind.emoji,
                            details: "\(tp.kind.note) · \(hhmmLocal(tp.time))",
@@ -486,13 +514,7 @@ struct CosmosView: View {
         astroEvents = events.filter { $0.datetime <= horizon }.sorted { $0.datetime < $1.datetime }
     }
 
-    private func hhmmLocal(_ date: Date) -> String {
-        let f = DateFormatter(); f.locale = Locale(identifier: "es_ES"); f.dateFormat = "HH:mm"
-        return f.string(from: date)
-    }
+    private func hhmmLocal(_ date: Date) -> String { Self.hhmmFmt.string(from: date) }
 
-    private func isoDay(_ date: Date) -> String {
-        let f = ISO8601DateFormatter(); f.formatOptions = [.withFullDate]
-        return f.string(from: date)
-    }
+    private func isoDay(_ date: Date) -> String { Self.isoDayFmt.string(from: date) }
 }

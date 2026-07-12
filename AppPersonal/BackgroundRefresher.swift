@@ -49,6 +49,11 @@ enum BackgroundRefresher {
     /// Fetch a single municipio's forecast + warning and persist its snapshot.
     @discardableResult
     private static func refreshCity(_ loc: SavedLocation) async -> Bool {
+        // No AEMET key → the app serves the whole forecast from Open-Meteo, so refresh
+        // from there too. Otherwise a key-less install would never update its widgets in
+        // the background (every AEMET call throws `notConfigured`).
+        guard AppConfiguration.shared.isAemetConfigured else { return await refreshCityOpenMeteo(loc) }
+
         async let d = try? await AEMETService.shared.forecastDaily(municipio: loc.code)
         async let h = try? await AEMETService.shared.forecastHourly(municipio: loc.code)
         let (daily, hourly) = await (d, h)
@@ -56,16 +61,44 @@ enum BackgroundRefresher {
 
         let alert = (try? await AEMETService.shared.alerts(
             municipioCode: loc.code, lat: loc.lat, lon: loc.lon))?.first?.badge
-        let snap = AemetSnapshotBuilder.makeAemetSnapshot(
-            municipio: loc.name, daily: daily, hourly: hourly, alert: alert)
 
+        // The station reading is what makes the widget's big number the *real* current
+        // temperature. Without it the snapshot falls back to the hourly forecast, so a
+        // background run would quietly overwrite the app's observed temp with a predicted one.
+        // Cities added via search start with `idema: nil` — resolve their station once here too.
+        var idema = loc.idema
+        if idema == nil, !loc.isCurrent {
+            idema = await LocationStore.shared.attachNearestStation(toCode: loc.code)
+        }
+        var obs: [AemetObservationRecord]? = nil
+        if let idema { obs = try? await AEMETService.shared.observation(idema: idema) }
+
+        let snap = AemetSnapshotBuilder.makeAemetSnapshot(
+            municipio: loc.name, daily: daily, hourly: hourly, observation: obs, alert: alert)
+        store(snap, for: loc)
+        return true
+    }
+
+    /// Open-Meteo twin of `refreshCity`, adapted into the same AEMET structs (so the
+    /// snapshot — including the observed current temperature — is built exactly the same
+    /// way). Open-Meteo has no warnings, so the badge stays whatever the app last stored.
+    private static func refreshCityOpenMeteo(_ loc: SavedLocation) async -> Bool {
+        guard let f = await OpenMeteoService.shared.fetchForecast(lat: loc.lat, lon: loc.lon) else { return false }
+        let alert = WidgetStore.loadAemet(code: loc.code)?.alert
+        let snap = AemetSnapshotBuilder.makeAemetSnapshot(
+            municipio: loc.name, daily: f.daily, hourly: f.hourly, observation: f.obs, alert: alert)
+        store(snap, for: loc)
+        return true
+    }
+
+    /// Persist a city's snapshot, mirroring it into the global/legacy key when it's the
+    /// city the app itself shows.
+    private static func store(_ snap: AemetSnapshot, for loc: SavedLocation) {
         WidgetStore.save(aemet: snap, forCode: loc.code)
-        // Mirror into the global/legacy key when this is the city the app shows.
         let store = LocationStore.shared
         let isSelected = loc.code == store.selectedCode
             || (store.selectedCode == SavedLocation.currentCode && loc.code == store.resolvedCurrent?.code)
         if isSelected { WidgetStore.save(aemet: snap) }
-        return true
     }
 
     /// Best-effort Netatmo exterior reading (temp / humidity / pressure).
@@ -78,19 +111,15 @@ enum BackgroundRefresher {
         let mods = main.modules ?? []
         let exterior = mods.first(where: { $0.id == cfg.moduleExterior })
             ?? mods.first(where: { $0.type == "NAModule1" })
-        let dd = exterior?.dashboardData
+        let rain = mods.first(where: { $0.id == cfg.moduleRain })
+            ?? mods.first(where: { $0.type == "NAModule3" })
 
         // The station physically lives in La Granja — tag the snapshot with its
-        // coords so a widget shows it only when configured for that town.
+        // coords so the weather widget shows it only when configured for that town.
         let st = LocationStore.shared.locations.first { $0.name.lowercased().contains("granja") }
             ?? SavedLocation.defaults[0]
-        WidgetStore.save(netatmo: NetatmoSnapshot(
-            stationName: cfg.stationLocation,
-            temperature: dd?["Temperature"]?.doubleValue,
-            humidity: dd?["Humidity"]?.doubleValue,
-            pressure: main.dashboardData?["Pressure"]?.doubleValue ?? dd?["Pressure"]?.doubleValue,
-            date: Date(),
-            lat: st.lat,
-            lon: st.lon))
+        WidgetStore.save(netatmo: NetatmoSnapshotBuilder.make(
+            station: main, exterior: exterior, rain: rain,
+            name: cfg.stationLocation, lat: st.lat, lon: st.lon))
     }
 }

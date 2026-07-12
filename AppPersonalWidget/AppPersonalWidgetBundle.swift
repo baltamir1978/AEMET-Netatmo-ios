@@ -7,5 +7,6 @@ struct AppPersonalWidgetBundle: WidgetBundle {
         WeatherWidget()
         SunMoonWidget()
         TidesWidget()
+        NetatmoWidget()
     }
 }

@@ -46,9 +46,14 @@
 		FACE00000000000000000061 /* AEMETService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FACE00000000000000000060 /* AEMETService.swift */; };
 		FACE00000000000000000063 /* AemetSnapshotBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = FACE00000000000000000062 /* AemetSnapshotBuilder.swift */; };
 		FACE00000000000000000064 /* AemetSnapshotBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = FACE00000000000000000062 /* AemetSnapshotBuilder.swift */; };
+		FACE00000000000000000081 /* OpenMeteoService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FACE00000000000000000080 /* OpenMeteoService.swift */; };
+		FACE00000000000000000083 /* OpenMeteoForecast.swift in Sources */ = {isa = PBXBuildFile; fileRef = FACE00000000000000000082 /* OpenMeteoForecast.swift */; };
+		FACE00000000000000000085 /* NetatmoWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = FACE00000000000000000084 /* NetatmoWidget.swift */; };
+		FACE00000000000000000071 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = FACE00000000000000000070 /* Localizable.xcstrings */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		FACE00000000000000000070 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		FACE00000000000000000001 /* AppPersonalWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = AppPersonalWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		FACE00000000000000000002 /* WidgetShared.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = WidgetShared.swift; path = Shared/WidgetShared.swift; sourceTree = SOURCE_ROOT; };
 		FACE00000000000000000003 /* SunMoonService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SunMoonService.swift; path = AppPersonal/SunMoonService.swift; sourceTree = SOURCE_ROOT; };
@@ -63,6 +68,9 @@
 		159C61582FC463B20082CE49 /* AppPersonal.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AppPersonal.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		FACE00000000000000000060 /* AEMETService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AEMETService.swift; path = AppPersonal/AEMETService.swift; sourceTree = SOURCE_ROOT; };
 		FACE00000000000000000062 /* AemetSnapshotBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AemetSnapshotBuilder.swift; path = Shared/AemetSnapshotBuilder.swift; sourceTree = SOURCE_ROOT; };
+		FACE00000000000000000080 /* OpenMeteoService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = OpenMeteoService.swift; path = AppPersonal/OpenMeteoService.swift; sourceTree = SOURCE_ROOT; };
+		FACE00000000000000000082 /* OpenMeteoForecast.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = OpenMeteoForecast.swift; path = AppPersonal/OpenMeteoForecast.swift; sourceTree = SOURCE_ROOT; };
+		FACE00000000000000000084 /* NetatmoWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetatmoWidget.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -117,8 +125,10 @@
 				FACE00000000000000000007 /* WeatherWidget.swift */,
 				FACE00000000000000000006 /* SunMoonWidget.swift */,
 				FACE00000000000000000052 /* TidesWidget.swift */,
+				FACE00000000000000000084 /* NetatmoWidget.swift */,
 				FACE00000000000000000008 /* WidgetTheme.swift */,
 				FACE0000000000000000003A /* WidgetConfigIntent.swift */,
+				FACE00000000000000000070 /* Localizable.xcstrings */,
 			);
 			path = AppPersonalWidget;
 			sourceTree = "<group>";
@@ -195,10 +205,14 @@
 				};
 			};
 			buildConfigurationList = 159C61532FC463B20082CE49 /* Build configuration list for PBXProject "AppPersonal" */;
-			developmentRegion = en;
+			developmentRegion = es;
 			hasScannedForEncodings = 0;
 			knownRegions = (
 				en,
+				es,
+				gl,
+				eu,
+				ca,
 				Base,
 			);
 			mainGroup = 159C614F2FC463B20082CE49;
@@ -226,6 +240,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				FACE00000000000000000071 /* Localizable.xcstrings in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -255,8 +270,11 @@
 				FACE0000000000000000000E /* MoonPhasesService.swift in Sources */,
 				FACE00000000000000000051 /* TidesService.swift in Sources */,
 				FACE00000000000000000053 /* TidesWidget.swift in Sources */,
+				FACE00000000000000000085 /* NetatmoWidget.swift in Sources */,
 				FACE00000000000000000061 /* AEMETService.swift in Sources */,
 				FACE00000000000000000064 /* AemetSnapshotBuilder.swift in Sources */,
+				FACE00000000000000000081 /* OpenMeteoService.swift in Sources */,
+				FACE00000000000000000083 /* OpenMeteoForecast.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -405,8 +423,9 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Tiempo ES";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "AppPersonal usa tu ubicación solo cuando pulsas el botón de localizar, para seleccionar la estación meteorológica y el municipio más cercanos. No se comparte ni almacena.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Tiempo España usa tu ubicación solo cuando pulsas el botón de localizar, para seleccionar la estación meteorológica y el municipio más cercanos. No se comparte ni almacena.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -441,8 +460,9 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Tiempo ES";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "AppPersonal usa tu ubicación solo cuando pulsas el botón de localizar, para seleccionar la estación meteorológica y el municipio más cercanos. No se comparte ni almacena.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Tiempo España usa tu ubicación solo cuando pulsas el botón de localizar, para seleccionar la estación meteorológica y el municipio más cercanos. No se comparte ni almacena.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

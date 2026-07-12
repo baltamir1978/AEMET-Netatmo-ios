@@ -10,7 +10,9 @@ struct ContentView: View {
     var body: some View {
         TabView(selection: $selection) {
             AemetView()
-                .tabItem { Label("AEMET",     systemImage: "cloud.sun") }
+                // Without an AEMET key the tab is served entirely from Open-Meteo, so
+                // calling it "AEMET" would be misleading — show "Tiempo" in that mode.
+                .tabItem { Label(cfg.isAemetConfigured ? "AEMET" : "Tiempo", systemImage: "cloud.sun") }
                 .tag(Tab.aemet)
             CosmosView()
                 .tabItem { Label("Sol·Luna",  systemImage: "moon.stars") }

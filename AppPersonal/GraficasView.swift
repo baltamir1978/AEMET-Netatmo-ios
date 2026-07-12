@@ -108,7 +108,7 @@ struct GraficasView: View {
             // Compact full-width segmented control to reclaim vertical space.
             Picker("Periodo", selection: $period) {
                 ForEach(periods, id: \.0) { (key, label) in
-                    Text(label).tag(key)
+                    Text(LocalizedStringKey(label)).tag(key)
                 }
             }
             .pickerStyle(.segmented)
@@ -120,7 +120,7 @@ struct GraficasView: View {
                     .foregroundStyle(.secondary).tracking(1.5)
                 HStack(spacing: 6) {
                     ForEach(periods, id: \.0) { (key, label) in
-                        Button(label) {
+                        Button(LocalizedStringKey(label)) {
                             period = key
                             loadBoth()
                         }
@@ -305,13 +305,13 @@ struct ChartCard: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Text(title)
+                Text(LocalizedStringKey(title))
                     .font(.caption).fontWeight(.bold).textCase(.uppercase)
                     .foregroundStyle(.secondary).tracking(1)
                 Spacer()
                 Picker("", selection: $selectedType) {
                     ForEach(typeOptions, id: \.0) { (key, label) in
-                        Text(label).tag(key)
+                        Text(LocalizedStringKey(label)).tag(key)
                     }
                 }
                 .pickerStyle(.menu)
@@ -418,7 +418,7 @@ struct ChartCard: View {
 
     private func statItem(label: String, value: String, date: String?) -> some View {
         VStack(spacing: 2) {
-            Text(label)
+            Text(LocalizedStringKey(label))
                 .font(.caption2).fontWeight(.semibold).textCase(.uppercase).foregroundStyle(.secondary)
             Text(value).font(.subheadline).fontWeight(.bold)
             if let d = date { Text(d).font(.caption2).foregroundStyle(.secondary) }

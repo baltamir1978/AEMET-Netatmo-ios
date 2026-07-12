@@ -41,30 +41,44 @@ struct WeatherProvider: AppIntentTimelineProvider {
         return WeatherEntry(date: Date(), netatmo: netatmo, aemet: aemet)
     }
 
-    /// Timeline path: try a live AEMET fetch for the configured city, write it back
-    /// to the shared store (so the app and sibling widgets benefit), and fall back to
-    /// the stored snapshot when offline / rate-limited. Netatmo + the AEMET warning
-    /// badge are carried over from the stored snapshot (the widget can't fetch those).
+    /// Timeline path: try a live fetch for the configured city, write it back to the
+    /// shared store (so the app and sibling widgets benefit), and fall back to the stored
+    /// snapshot when offline / rate-limited. Netatmo + the AEMET warning badge are carried
+    /// over from the stored snapshot (the widget can't fetch those).
     private func freshEntry(for loc: SavedLocation) async -> WeatherEntry {
         let stored = WidgetStore.loadAemet(code: loc.code) ?? WidgetStore.loadAemet()
         let all = WidgetStore.loadNetatmo()
         let netatmo = stationMatches(all, loc) ? all : nil
 
-        var aemet = stored
-        if (WidgetStore.loadAemetApiKey() ?? "").isEmpty == false {
-            // 30-min disk cache: a timeline rebuild within the window reuses it,
-            // so we don't hammer AEMET's rate-limited API on every WidgetKit poll.
-            async let d = try? await AEMETService.shared.forecastDaily(municipio: loc.code, maxAge: 30 * 60)
-            async let h = try? await AEMETService.shared.forecastHourly(municipio: loc.code, maxAge: 30 * 60)
-            let (dr, hr) = await (d, h)
-            if dr != nil || hr != nil {
-                let fresh = AemetSnapshotBuilder.makeAemetSnapshot(
-                    municipio: loc.name, daily: dr, hourly: hr, alert: stored?.alert)
-                WidgetStore.save(aemet: fresh, forCode: loc.code)
-                aemet = fresh
-            }
+        let fresh = await freshSnapshot(for: loc, alert: stored?.alert)
+        if let fresh {
+            WidgetStore.save(aemet: fresh, forCode: loc.code)
         }
-        return WeatherEntry(date: Date(), netatmo: netatmo, aemet: aemet)
+        return WeatherEntry(date: Date(), netatmo: netatmo, aemet: fresh ?? stored)
+    }
+
+    /// A newly fetched snapshot for `loc`, from AEMET when a key is configured and from
+    /// Open-Meteo otherwise — the same provider split the app's AEMET tab makes. Without
+    /// the Open-Meteo branch a key-less install left the widget frozen on whatever the app
+    /// last wrote, since nothing else refreshes it in the background. Nil when the fetch fails.
+    private func freshSnapshot(for loc: SavedLocation, alert: AemetAlertBadge?) async -> AemetSnapshot? {
+        guard (WidgetStore.loadAemetApiKey() ?? "").isEmpty == false else {
+            guard let f = await OpenMeteoService.shared.fetchForecast(lat: loc.lat, lon: loc.lon) else { return nil }
+            return AemetSnapshotBuilder.makeAemetSnapshot(
+                municipio: loc.name, daily: f.daily, hourly: f.hourly, observation: f.obs, alert: alert)
+        }
+        // 30-min disk cache: a timeline rebuild within the window reuses it,
+        // so we don't hammer AEMET's rate-limited API on every WidgetKit poll.
+        async let d = try? await AEMETService.shared.forecastDaily(municipio: loc.code, maxAge: 30 * 60)
+        async let h = try? await AEMETService.shared.forecastHourly(municipio: loc.code, maxAge: 30 * 60)
+        let (dr, hr) = await (d, h)
+        guard dr != nil || hr != nil else { return nil }
+        var obs: [AemetObservationRecord]? = nil
+        if let id = loc.idema {
+            obs = try? await AEMETService.shared.observation(idema: id, maxAge: 30 * 60)
+        }
+        return AemetSnapshotBuilder.makeAemetSnapshot(
+            municipio: loc.name, daily: dr, hourly: hr, observation: obs, alert: alert)
     }
 
     /// True when the configured location is the Netatmo station's town (or coords unknown).

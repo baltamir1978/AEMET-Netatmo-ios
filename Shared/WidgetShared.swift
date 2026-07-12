@@ -55,11 +55,33 @@ enum RefreshInterval: Int, CaseIterable, Identifiable {
     var label: String { "\(rawValue) h" }
 
     static let `default` = RefreshInterval.h3
+
+    /// The two choices surfaced in Settings. The full set of raw values stays valid
+    /// (older builds / migrations), but the picker only offers a simple frequent/saver
+    /// pair — the exact hour is more of a hint anyway (iOS throttles background work).
+    static let pickerCases: [RefreshInterval] = [.h1, .h6]
+
+    /// User-facing name for the simplified picker.
+    var pickerLabel: String {
+        switch self {
+        case .h1: return "Frecuente · 1 h"
+        case .h6: return "Ahorro · 6 h"
+        default:  return label
+        }
+    }
+
+    /// Collapse any stored cadence onto the closest simplified choice (for display).
+    var simplified: RefreshInterval { hours <= 3 ? .h1 : .h6 }
 }
 
 // MARK: - Snapshots
 
-/// Latest Netatmo exterior reading, written by the app's Actual tab.
+/// Latest Netatmo reading, written by the app (Actual tab + background refresh).
+/// The widget extension can't talk to Netatmo itself (OAuth lives in the app), so it
+/// renders whatever the app last stored here.
+///
+/// Everything past `lon` was added for the dedicated Netatmo widget and is optional, so
+/// snapshots written by older builds still decode (missing key → nil).
 struct NetatmoSnapshot: Codable {
     var stationName: String
     var temperature: Double?   // °C, exterior
@@ -68,6 +90,24 @@ struct NetatmoSnapshot: Codable {
     var date: Date
     var lat: Double?           // station location — lets a widget show it only for its town
     var lon: Double?
+
+    // Exterior extras
+    var tempMinOut: Double?    // today's min at the station
+    var tempMaxOut: Double?    // today's max
+    var rain: Double?          // mm in the last hour
+    var rainToday: Double?     // mm accumulated today
+
+    // Interior (base station)
+    var tempIn: Double?        // °C
+    var humidityIn: Double?    // %
+    var co2: Double?           // ppm
+    var noise: Double?         // dB
+
+    /// CO₂ comfort band, the way Netatmo colours it: ≤1000 good, ≤1600 fair, above that poor.
+    var co2Level: Int? {
+        guard let co2 else { return nil }
+        return co2 <= 1000 ? 0 : (co2 <= 1600 ? 1 : 2)
+    }
 }
 
 /// One hour of the AEMET hourly forecast, for the widget's hourly strip.
@@ -139,6 +179,7 @@ enum WidgetStore {
     private static let resolvedCurrentKey = "widget.locations.current"
     private static let intervalKey  = "widget.refresh.intervalHours"
     private static let aemetApiKeyKey = "widget.aemet.apiKey"
+    private static let stationOverridesKey = "widget.stations.overrides"
 
     // Refresh cadence ----------------------------------------------------------
 
@@ -160,6 +201,31 @@ enum WidgetStore {
     static func loadAemetApiKey() -> String? {
         let k = defaults?.string(forKey: aemetApiKeyKey)
         return (k?.isEmpty == false) ? k : nil
+    }
+
+    // Station overrides --------------------------------------------------------
+    //
+    // The observation station a location uses is normally the nearest one, but "nearest"
+    // isn't always "most representative" — in the mountains a station 10 km away can sit
+    // on the other side of the ridge while one 12 km away shares your valley and altitude.
+    // When the user picks a station by hand we remember it *per municipio code*, because
+    // the GPS "Ubicación actual" entry is rebuilt from scratch on every fix and would
+    // otherwise snap straight back to the nearest station.
+
+    private static func stationOverrides() -> [String: String] {
+        defaults?.dictionary(forKey: stationOverridesKey) as? [String: String] ?? [:]
+    }
+
+    /// The station the user pinned for `code`, if any.
+    static func stationOverride(forCode code: String) -> String? {
+        stationOverrides()[code]
+    }
+
+    /// Pin `idema` as the station for `code`; pass nil to go back to automatic (nearest).
+    static func saveStationOverride(_ idema: String?, forCode code: String) {
+        var all = stationOverrides()
+        all[code] = idema
+        defaults?.set(all, forKey: stationOverridesKey)
     }
 
     // Snapshots ----------------------------------------------------------------
