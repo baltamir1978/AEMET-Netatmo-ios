@@ -112,7 +112,7 @@
     "%lld" : {
 
     },
-    "%lld hPa" : {
+    "%lld km/h" : {
 
     },
     "%lld%%" : {
@@ -641,6 +641,34 @@
         }
       }
     },
+    "Humedad %lld por ciento" : {
+      "localizations" : {
+        "ca" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Humitat %lld per cent"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Humidity %lld percent"
+          }
+        },
+        "eu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hezetasuna ehuneko %lld"
+          }
+        },
+        "gl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Humidade %lld por cento"
+          }
+        }
+      }
+    },
     "Humedad exterior %lld por ciento" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -965,30 +993,30 @@
         }
       }
     },
-    "Pronóstico AEMET (actual, por horas y próximos días) + tu estación Netatmo. Elige la ciudad en «Editar widget»." : {
+    "Pronóstico AEMET: temperatura actual de la estación, por horas y próximos días. Elige la ciudad en «Editar widget»." : {
       "localizations" : {
         "ca" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Pronòstic AEMET (actual, per hores i pròxims dies) + la teva estació Netatmo. Tria la ciutat a «Edita el widget»."
+            "value" : "Pronòstic AEMET: temperatura actual de l'estació, per hores i pròxims dies. Tria la ciutat a «Edita el widget»."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "AEMET forecast (now, hourly and coming days) + your Netatmo station. Pick the city in «Edit widget»."
+            "value" : "AEMET forecast: the station's current temperature, hourly and coming days. Pick the city in «Edit widget»."
           }
         },
         "eu" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "AEMET iragarpena (unekoa, orduka eta hurrengo egunetakoa) + zure Netatmo estazioa. Aukeratu hiria «Editatu widgeta» atalean."
+            "value" : "AEMET iragarpena: estazioaren uneko tenperatura, orduka eta hurrengo egunetakoa. Aukeratu hiria «Editatu widgeta» atalean."
           }
         },
         "gl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Prognóstico AEMET (actual, por horas e vindeiros días) + a túa estación Netatmo. Escolle a cidade en «Editar widget»."
+            "value" : "Prognóstico AEMET: temperatura actual da estación, por horas e vindeiros días. Escolle a cidade en «Editar widget»."
           }
         }
       }
@@ -1300,6 +1328,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Verde"
+          }
+        }
+      }
+    },
+    "Viento %lld kilómetros por hora" : {
+      "localizations" : {
+        "ca" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vent %lld quilòmetres per hora"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wind %lld kilometres per hour"
+          }
+        },
+        "eu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Haizea orduko %lld kilometro"
+          }
+        },
+        "gl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vento %lld quilómetros por hora"
           }
         }
       }

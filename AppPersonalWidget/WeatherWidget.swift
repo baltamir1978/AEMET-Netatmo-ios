@@ -4,9 +4,12 @@ import AppIntents
 
 // MARK: - Entry
 
+/// Purely AEMET (station reading + forecast): every number here comes from the same place
+/// the app's Tiempo tab reads. The Netatmo sensor sits in one specific garden and reads a
+/// couple of degrees off the station, so mixing it in here was what made the widget and the
+/// app disagree — it has its own widget (`NetatmoWidget`) for that reading.
 struct WeatherEntry: TimelineEntry {
     let date: Date
-    let netatmo: NetatmoSnapshot?
     let aemet: AemetSnapshot?
 }
 
@@ -14,7 +17,7 @@ struct WeatherEntry: TimelineEntry {
 
 struct WeatherProvider: AppIntentTimelineProvider {
     func placeholder(in context: Context) -> WeatherEntry {
-        WeatherEntry(date: Date(), netatmo: WidgetStore.loadNetatmo(), aemet: WidgetStore.loadAemet())
+        WeatherEntry(date: Date(), aemet: WidgetStore.loadAemet())
     }
 
     func snapshot(for configuration: SelectLocationIntent, in context: Context) async -> WeatherEntry {
@@ -35,26 +38,20 @@ struct WeatherProvider: AppIntentTimelineProvider {
     private func entry(for configuration: SelectLocationIntent) -> WeatherEntry {
         let loc = resolveWidgetLocation(configuration)
         let aemet = WidgetStore.loadAemet(code: loc.code) ?? WidgetStore.loadAemet()
-        // The Netatmo sensor belongs to one physical place — show it only on its own town.
-        let all = WidgetStore.loadNetatmo()
-        let netatmo = stationMatches(all, loc) ? all : nil
-        return WeatherEntry(date: Date(), netatmo: netatmo, aemet: aemet)
+        return WeatherEntry(date: Date(), aemet: aemet)
     }
 
     /// Timeline path: try a live fetch for the configured city, write it back to the
     /// shared store (so the app and sibling widgets benefit), and fall back to the stored
-    /// snapshot when offline / rate-limited. Netatmo + the AEMET warning badge are carried
-    /// over from the stored snapshot (the widget can't fetch those).
+    /// snapshot when offline / rate-limited. The AEMET warning badge is carried over from
+    /// the stored snapshot (the widget can't fetch it).
     private func freshEntry(for loc: SavedLocation) async -> WeatherEntry {
         let stored = WidgetStore.loadAemet(code: loc.code) ?? WidgetStore.loadAemet()
-        let all = WidgetStore.loadNetatmo()
-        let netatmo = stationMatches(all, loc) ? all : nil
-
         let fresh = await freshSnapshot(for: loc, alert: stored?.alert)
         if let fresh {
             WidgetStore.save(aemet: fresh, forCode: loc.code)
         }
-        return WeatherEntry(date: Date(), netatmo: netatmo, aemet: fresh ?? stored)
+        return WeatherEntry(date: Date(), aemet: fresh ?? stored)
     }
 
     /// A newly fetched snapshot for `loc`, from AEMET when a key is configured and from
@@ -81,12 +78,6 @@ struct WeatherProvider: AppIntentTimelineProvider {
             municipio: loc.name, daily: dr, hourly: hr, observation: obs, alert: alert)
     }
 
-    /// True when the configured location is the Netatmo station's town (or coords unknown).
-    private func stationMatches(_ n: NetatmoSnapshot?, _ loc: SavedLocation) -> Bool {
-        guard let n else { return false }
-        guard let lat = n.lat, let lon = n.lon else { return true }   // legacy snapshot: don't hide
-        return abs(lat - loc.lat) < 0.3 && abs(lon - loc.lon) < 0.3
-    }
 }
 
 // MARK: - View
@@ -106,17 +97,18 @@ struct WeatherWidgetView: View {
         .containerBackground(for: .widget) { WidgetTheme.heroGradient }
     }
 
-    // The big number: prefer the real Netatmo reading, fall back to AEMET's current hour.
+    // The big number, and the same chain the app's Tiempo hero uses (station reading →
+    // current-hour forecast → daily max), so both screens always agree. The Netatmo sensor
+    // is a different thermometer in a different spot: preferring it here made the widget
+    // disagree with the app by several degrees. It has its own widget for that reading.
+    // The hourly fallback matters because AEMET sometimes prunes the current (partial)
+    // hour from its forecast; the hourly strip is range-based, so it always has a point.
     private var currentTemp: Int? {
-        if let t = entry.netatmo?.temperature { return Int(t.rounded()) }
-        // Fall back to the first upcoming hourly point: AEMET sometimes prunes the
-        // current (partial) hour from its forecast, which leaves `currentTemp` nil and
-        // the widget showing "—". The hourly strip is range-based, so it always has it.
-        return entry.aemet?.currentTemp ?? entry.aemet?.hourly?.first?.temp
+        entry.aemet?.currentTemp ?? entry.aemet?.hourly?.first?.temp ?? entry.aemet?.tempMax
     }
 
     private var locationTitle: String {
-        entry.aemet?.municipio ?? entry.netatmo?.stationName ?? "—"
+        entry.aemet?.municipio ?? "—"
     }
 
     /// Drops today's already-elapsed hours so a stale snapshot still advances
@@ -167,7 +159,7 @@ struct WeatherWidgetView: View {
     // MARK: Small
 
     @ViewBuilder private var small: some View {
-        if entry.netatmo == nil && entry.aemet == nil {
+        if entry.aemet == nil {
             placeholderContent
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         } else {
@@ -203,10 +195,18 @@ struct WeatherWidgetView: View {
                     }
                     .font(.caption.weight(.medium)).labelStyle(.titleAndIcon)
                 }
-                if let n = entry.netatmo {
+                if entry.aemet?.humidity != nil || entry.aemet?.windKmh != nil {
                     HStack(spacing: 8) {
-                        if let h = n.humidity { Label("\(Int(h))%", systemImage: "humidity.fill") }
-                        if let p = n.pressure { Label("\(Int(p))", systemImage: "gauge.with.dots.needle.bottom.50percent") }
+                        if let h = entry.aemet?.humidity {
+                            Label("\(h)%", systemImage: "humidity.fill")
+                                .accessibilityLabel(Text("Humedad \(h) por ciento"))
+                        }
+                        if let w = entry.aemet?.windKmh {
+                            // Unit dropped on the small family — the wind icon carries it,
+                            // and "12 km/h" next to the humidity chip wraps at this width.
+                            Label("\(w)", systemImage: "wind")
+                                .accessibilityLabel(Text("Viento \(w) kilómetros por hora"))
+                        }
                     }
                     .font(.caption2).foregroundStyle(.white.opacity(0.8)).labelStyle(.titleAndIcon)
                 }
@@ -219,19 +219,23 @@ struct WeatherWidgetView: View {
     // MARK: Medium
 
     @ViewBuilder private var medium: some View {
-        if entry.netatmo == nil && entry.aemet == nil {
+        if entry.aemet == nil {
             placeholderContent
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
         } else {
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 2) {
                 // Location + alert live in their own full-width top row so the capsule can
                 // run across the whole widget (the right column below holds máx/mín, which
-                // is centred lower down and leaves this top band free).
+                // is centred lower down and leaves this top band free). The extra 4 pt on
+                // top drops the town name away from the widget's edge, and the tighter stack
+                // spacing more than pays for it — the medium has no slack at the bottom, so
+                // any net height added here pushes the hourly row's rain % off the widget.
                 HStack(spacing: 5) {
                     Text(locationTitle).font(.subheadline.weight(.semibold))
                         .foregroundStyle(.white).lineLimit(1).layoutPriority(1)
                     alertChip(compact: false)
                 }
+                .padding(.top, 2)
                 // .top aligns máx/mín with the top of the big temperature so they don't
                 // drift to the vertical middle of the (now location-less) left column.
                 HStack(alignment: .top) {
@@ -257,7 +261,7 @@ struct WeatherWidgetView: View {
     // MARK: Large
 
     @ViewBuilder private var large: some View {
-        if entry.netatmo == nil && entry.aemet == nil {
+        if entry.aemet == nil {
             placeholderContent
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
         } else {
@@ -332,7 +336,8 @@ struct WeatherWidgetView: View {
         }
     }
 
-    /// Max/min + Netatmo humidity & pressure (right side of medium & large).
+    /// Max/min + the station's humidity & wind (right side of medium & large) — all AEMET,
+    /// so every figure on the widget matches the app's Tiempo hero.
     private func trailingDetails(showUpdated: Bool,
                                  maxMinFont: Font = .subheadline.weight(.medium)) -> some View {
         VStack(alignment: .trailing, spacing: 6) {
@@ -348,17 +353,19 @@ struct WeatherWidgetView: View {
                 .font(maxMinFont)
                 .labelStyle(.titleAndIcon)
             }
-            if let n = entry.netatmo {
-                if let h = n.humidity {
-                    Label("\(Int(h))%", systemImage: "humidity.fill")
+            if let a = entry.aemet {
+                if let h = a.humidity {
+                    Label("\(h)%", systemImage: "humidity.fill")
                         .font(.caption).foregroundStyle(.white.opacity(0.85))
+                        .accessibilityLabel(Text("Humedad \(h) por ciento"))
                 }
-                if let p = n.pressure {
-                    Label("\(Int(p)) hPa", systemImage: "gauge.with.dots.needle.bottom.50percent")
+                if let w = a.windKmh {
+                    Label("\(w) km/h", systemImage: "wind")
                         .font(.caption).foregroundStyle(.white.opacity(0.85))
+                        .accessibilityLabel(Text("Viento \(w) kilómetros por hora"))
                 }
                 if showUpdated {
-                    Text("Act. \(timeString(n.date))")
+                    Text("Act. \(timeString(a.date))")
                         .font(.caption2).foregroundStyle(.white.opacity(0.6))
                 }
             }
@@ -482,7 +489,7 @@ struct WeatherWidget: Widget {
             WeatherWidgetView(entry: entry)
         }
         .configurationDisplayName("Tiempo")
-        .description("Pronóstico AEMET (actual, por horas y próximos días) + tu estación Netatmo. Elige la ciudad en «Editar widget».")
+        .description("Pronóstico AEMET: temperatura actual de la estación, por horas y próximos días. Elige la ciudad en «Editar widget».")
         .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
     }
 }

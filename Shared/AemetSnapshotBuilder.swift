@@ -66,8 +66,20 @@ enum AemetSnapshotBuilder {
             date: Date(),
             hourly: hourPts.isEmpty ? nil : hourPts,
             daily: dayPoints.isEmpty ? nil : dayPoints,
-            alert: alert
+            alert: alert,
+            humidity: latestValue(observation, \.hr).map { Int($0.rounded()) },
+            windKmh: latestValue(observation, \.vv).map { Int($0 * 3.6) }
         )
+    }
+
+    /// Most recent non-nil value for an observation field, scanning back from the newest
+    /// record — the twin of the view's `latestObs`. AEMET publishes a station's sensors on
+    /// different cycles, so its newest record often carries only `ta`, with `hr`/`vv` still
+    /// null; `records.last?.hr` would then drop humidity even though the record an hour
+    /// earlier has it.
+    static func latestValue<T>(_ records: [AemetObservationRecord]?,
+                               _ keyPath: KeyPath<AemetObservationRecord, T?>) -> T? {
+        records?.last(where: { $0[keyPath: keyPath] != nil })?[keyPath: keyPath]
     }
 
     /// Newest observation record that actually carries a temperature. AEMET publishes a

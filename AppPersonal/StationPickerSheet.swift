@@ -82,14 +82,19 @@ struct StationPickerSheet: View {
 
     private var automaticRow: some View {
         let nearest = nearby.first.map { LocationStore.shortStationName($0.station.nombre) }
+        // On automatic, name the station actually in use (same value the Tiempo tab's card
+        // shows) instead of recomputing "nearest" here — a city saved under an older rule
+        // keeps its station until it's re-resolved, and the two screens must not disagree.
+        // With a station pinned, "Ahora" describes what automatic *would* pick.
+        let inUse = pinned == nil ? (store.stationName(forCode: code) ?? nearest) : nearest
         return Button {
             pick(nil)
         } label: {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Automática").foregroundStyle(.primary)
-                    if let nearest {
-                        Text("Ahora: \(nearest)").font(.caption).foregroundStyle(.secondary)
+                    if let inUse {
+                        Text("Ahora: \(inUse)").font(.caption).foregroundStyle(.secondary)
                     }
                 }
                 Spacer()
@@ -97,7 +102,7 @@ struct StationPickerSheet: View {
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(nearest.map { Text("Automática, la estación más cercana: \($0)") }
+        .accessibilityLabel(inUse.map { Text("Automática, la estación más cercana: \($0)") }
                             ?? Text("Automática"))
         .accessibilityAddTraits(pinned == nil ? [.isButton, .isSelected] : .isButton)
     }

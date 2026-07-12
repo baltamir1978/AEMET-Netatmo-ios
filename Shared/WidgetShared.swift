@@ -165,6 +165,10 @@ struct AemetSnapshot: Codable {
     var hourly: [AemetHourPoint]?
     var daily: [AemetDayPoint]?
     var alert: AemetAlertBadge?    // highest active AEMET warning, if any
+    // Station readings, so the widget's detail chips come from the same source as the
+    // big number (they used to be Netatmo's, which is a different place entirely).
+    var humidity: Int?             // %, from the observation station
+    var windKmh: Int?              // km/h, from the observation station
 }
 
 // MARK: - Store

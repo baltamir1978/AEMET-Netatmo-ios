@@ -82,7 +82,7 @@ final class LocationStore: ObservableObject {
         let cityName = await reverseGeocodeCity(coord)
         let municipio = cityName.flatMap { matchMunicipio(named: $0) }
             ?? nearestMunicipio(to: coord)
-        guard let n = municipio, let lat = n.lat, let lon = n.lon else { return false }
+        guard let n = municipio else { return false }
         // Observation station (real readings, e.g. "Madrid, El Goloso") + a friendly label:
         // the one the user pinned for this municipio, else the nearest. The station name
         // reliably yields "El Goloso"; the geocoded city is the fallback, then the municipio.
@@ -92,8 +92,14 @@ final class LocationStore: ObservableObject {
         let realPlace = cityName ?? n.nombre
         let stationName = station.map { Self.shortStationName($0.0.nombre) }
         let stationDist = station.map { distanceKm(coord, $0.1) }
+        // Carry the GPS fix, not the municipio centroid (`n.lat/n.lon`): the station above
+        // was picked from where you actually are, so anything that later measures from this
+        // location — the station picker's list and distances, above all — has to measure
+        // from the same point. With the centroid stored, the picker ranked stations from the
+        // middle of the municipio and named a different "nearest" than the one in use.
         let loc = SavedLocation(code: n.codMunicipio, name: realPlace, province: nil,
-                                lat: lat, lon: lon, idema: station?.0.indicativo,
+                                lat: coord.latitude, lon: coord.longitude,
+                                idema: station?.0.indicativo,
                                 stationName: stationName, stationDistanceKm: stationDist)
         resolvedCurrent = loc
         WidgetStore.saveResolvedCurrent(loc)
@@ -149,11 +155,12 @@ final class LocationStore: ObservableObject {
     }
 
     /// The AEMET observation station nearest to `coord` (with its coordinate), if any.
+    /// Ranks by the same great-circle km the picker lists, so "Automática" and the top of
+    /// the picker's list are always the same station. (It used to rank by squared degrees,
+    /// which stretches longitude — at 41°N that's ~25% off, enough to swap two stations
+    /// sitting within half a kilometre of each other, like Segovia and El Paular.)
     private func nearestStation(to coord: CLLocationCoordinate2D) async -> (AemetLiveStation, CLLocationCoordinate2D)? {
-        await loadStations()
-        guard let best = stations.min(by: {
-            sqDist(lat: $0.lat, lon: $0.lon, c: coord) < sqDist(lat: $1.lat, lon: $1.lon, c: coord)
-        }) else { return nil }
+        guard let best = await nearbyStations(to: coord, limit: 1).first?.station else { return nil }
         return (best, CLLocationCoordinate2D(latitude: best.lat, longitude: best.lon))
     }
 
@@ -200,6 +207,16 @@ final class LocationStore: ObservableObject {
     /// The station currently pinned for `code` (nil when it's resolved automatically).
     func pinnedStation(forCode code: String) -> String? {
         WidgetStore.stationOverride(forCode: code)
+    }
+
+    /// Name of the station a location is *actually* reading from right now — what the
+    /// Tiempo tab's card shows. The picker quotes this rather than recomputing "nearest",
+    /// so the two screens can't name different stations even if a city was saved back when
+    /// the automatic pick used a different rule.
+    func stationName(forCode code: String) -> String? {
+        let loc = locations.first { $0.code == code }
+            ?? (resolvedCurrent?.code == code ? resolvedCurrent : nil)
+        return loc?.stationName
     }
 
     /// Coordinates of a followed location — or of the resolved GPS entry, whose `code` is

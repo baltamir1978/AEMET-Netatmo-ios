@@ -24,6 +24,12 @@ struct AemetView: View {
     /// than this; only an explicit pull/tap forces a live request. Keeps us well
     /// under AEMET's request limits — forecasts only update a few times a day.
     private let aemetTTL: TimeInterval = 3 * 60 * 60
+    /// Station readings publish hourly and only count as "now" for 2 h (`freshObsTemp`),
+    /// so they get a much shorter TTL than the forecast: on the 3 h one, a 2½ h-old cached
+    /// reading was thrown away as stale and the hero fell back to the forecast — while the
+    /// widget, which refreshes observations every 30 min, showed the real station value.
+    /// That's the two-degree gap between app and widget. Same window as the widget.
+    private let aemetObsTTL: TimeInterval = 30 * 60
     /// Warnings are time-sensitive, so auto-refreshes accept fresher cache than the
     /// forecast. The CAP bundle is cached per CCAA, so cities sharing one reuse it.
     private let aemetAlertTTL: TimeInterval = 60 * 60
@@ -269,14 +275,18 @@ struct AemetView: View {
     }
 
     /// Shows the selected location's real name plus the AEMET observation station being
-    /// used and its estimated distance. Works for any location: the station name/coords
-    /// come from the live observation (`ubi`/`lat`/`lon`); for the GPS entry we prefer the
-    /// exact GPS→station distance captured at resolve time. Tapping it opens the station
-    /// picker — the nearest station isn't always the most representative one.
+    /// used and its estimated distance. Name and distance come from the store — the same
+    /// values `LocationStore.apply(station:)` wrote from the station inventory, which is
+    /// what the picker lists — so the card and the picker can't disagree. The live
+    /// observation's own `ubi` is only a fallback for locations saved before stations were
+    /// attached: AEMET words it differently there ("PUERTO DE NAVACERRADA" vs the
+    /// inventory's "Navacerrada, Puerto"), which is exactly how the two screens drifted
+    /// apart. Tapping it opens the station picker — the nearest station isn't always the
+    /// most representative one.
     @ViewBuilder
     private func currentLocationCard() -> some View {
         let loc = store.selected
-        let stationName = obs?.last?.ubi.map { LocationStore.shortStationName($0) } ?? loc.stationName
+        let stationName = loc.stationName ?? obs?.last?.ubi.map { LocationStore.shortStationName($0) }
         if let station = stationName {
             let km = stationDistanceKm(loc: loc)
             Button {
@@ -318,12 +328,13 @@ struct AemetView: View {
         }
     }
 
-    /// Estimated km from the selected location to the observation station. Prefers the
-    /// GPS-resolved distance (current entry); otherwise measures the location coords to
-    /// the station coords carried by the live observation.
+    /// Estimated km from the selected location to the observation station. The stored
+    /// distance wins: it was measured from the same coordinate the picker measures from,
+    /// so both screens quote the same number. Falls back to the station coords carried by
+    /// the live observation when the location predates that field.
     private func stationDistanceKm(loc: SavedLocation) -> Double? {
-        if loc.isCurrent, let d = loc.stationDistanceKm { return d }
-        guard let sla = obs?.last?.lat, let slo = obs?.last?.lon else { return loc.stationDistanceKm }
+        if let d = loc.stationDistanceKm { return d }
+        guard let sla = obs?.last?.lat, let slo = obs?.last?.lon else { return nil }
         let a = CLLocation(latitude: loc.lat, longitude: loc.lon)
         let b = CLLocation(latitude: sla, longitude: slo)
         return a.distance(from: b) / 1000
@@ -1047,7 +1058,7 @@ struct AemetView: View {
         async let hResult = AEMETService.shared.forecastHourly(municipio: municipio, maxAge: maxAge)
         let obsTask = idema.map { id in
             Task<[AemetObservationRecord]?, Never> {
-                try? await AEMETService.shared.observation(idema: id, maxAge: maxAge)
+                try? await AEMETService.shared.observation(idema: id, maxAge: force ? nil : aemetObsTTL)
             }
         }
         let omTask = coords.map { c in
@@ -1157,7 +1168,7 @@ struct AemetView: View {
         let cityAlert = (try? await AEMETService.shared.alerts(
             municipioCode: loc.code, lat: loc.lat, lon: loc.lon, maxAge: aemetAlertTTL))?.first?.badge
         var cityObs: [AemetObservationRecord]? = nil
-        if let id = loc.idema { cityObs = try? await AEMETService.shared.observation(idema: id, maxAge: aemetTTL) }
+        if let id = loc.idema { cityObs = try? await AEMETService.shared.observation(idema: id, maxAge: aemetObsTTL) }
         let snap = AemetSnapshotBuilder.makeAemetSnapshot(municipio: loc.name, daily: dr, hourly: hr,
                                                           observation: cityObs, alert: cityAlert)
         WidgetStore.save(aemet: snap, forCode: loc.code)
@@ -1181,7 +1192,7 @@ struct AemetView: View {
             let cityAlert = (try? await AEMETService.shared.alerts(
                 municipioCode: loc.code, lat: loc.lat, lon: loc.lon, maxAge: aemetAlertTTL))?.first?.badge
             var cityObs: [AemetObservationRecord]? = nil
-            if let id = loc.idema { cityObs = try? await AEMETService.shared.observation(idema: id, maxAge: aemetTTL) }
+            if let id = loc.idema { cityObs = try? await AEMETService.shared.observation(idema: id, maxAge: aemetObsTTL) }
             let snap = AemetSnapshotBuilder.makeAemetSnapshot(municipio: loc.name, daily: dr, hourly: hr,
                                                               observation: cityObs, alert: cityAlert)
             WidgetStore.save(aemet: snap, forCode: loc.code)
