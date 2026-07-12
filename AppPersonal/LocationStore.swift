@@ -103,6 +103,14 @@ final class LocationStore: ObservableObject {
                                 stationName: stationName, stationDistanceKm: stationDist)
         resolvedCurrent = loc
         WidgetStore.saveResolvedCurrent(loc)
+        // If the same municipio is also a followed city, give it this station too. For AEMET
+        // they are the same place (the pin is stored per municipio), and leaving them with
+        // different `idema`s means the app reads a different station depending on whether
+        // you're on "📍 Ubicación actual" or on the city — with each screen quoting whichever
+        // of the two entries it happened to look up.
+        if let (s, sCoord) = station, locations.contains(where: { $0.code == n.codMunicipio }) {
+            apply(station: s, km: distanceKm(coord, sCoord), toCode: n.codMunicipio)
+        }
         WidgetCenter.shared.reloadAllTimelines()
         return true
     }
@@ -209,11 +217,17 @@ final class LocationStore: ObservableObject {
         WidgetStore.stationOverride(forCode: code)
     }
 
-    /// Name of the station a location is *actually* reading from right now — what the
-    /// Tiempo tab's card shows. The picker quotes this rather than recomputing "nearest",
-    /// so the two screens can't name different stations even if a city was saved back when
-    /// the automatic pick used a different rule.
+    /// Name of the station the *selected* location is reading from — what the Tiempo tab's
+    /// card shows. The picker quotes this instead of recomputing "nearest", so the two
+    /// screens can't name different stations.
+    ///
+    /// The selected entry comes first on purpose: the GPS entry and a followed city can
+    /// share a municipio code while being two different `SavedLocation` objects, so looking
+    /// the code up in `locations` could answer with the followed city's station while the
+    /// screen is showing the GPS one. That's exactly how the card said "El Paular" and the
+    /// picker "Segovia".
     func stationName(forCode code: String) -> String? {
+        if selected.code == code { return selected.stationName }
         let loc = locations.first { $0.code == code }
             ?? (resolvedCurrent?.code == code ? resolvedCurrent : nil)
         return loc?.stationName
