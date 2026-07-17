@@ -11,6 +11,7 @@ import AppIntents
 struct WeatherEntry: TimelineEntry {
     let date: Date
     let aemet: AemetSnapshot?
+    var background: TempBackground = .theme
 }
 
 // MARK: - Provider
@@ -20,38 +21,38 @@ struct WeatherProvider: AppIntentTimelineProvider {
         WeatherEntry(date: Date(), aemet: WidgetStore.loadAemet())
     }
 
-    func snapshot(for configuration: SelectLocationIntent, in context: Context) async -> WeatherEntry {
+    func snapshot(for configuration: WeatherStyleIntent, in context: Context) async -> WeatherEntry {
         entry(for: configuration)
     }
 
-    func timeline(for configuration: SelectLocationIntent, in context: Context) async -> Timeline<WeatherEntry> {
+    func timeline(for configuration: WeatherStyleIntent, in context: Context) async -> Timeline<WeatherEntry> {
         let loc = resolveWidgetLocation(configuration)
         // Pull fresh AEMET data ourselves so the widget updates even if the app
         // hasn't been opened; falls back to the stored snapshot on any failure.
-        let e = await freshEntry(for: loc)
+        let e = await freshEntry(for: loc, background: configuration.background)
         // Next refresh follows the user's chosen cadence (Ajustes · 1/3/6/12 h).
         let next = Date().addingTimeInterval(WidgetStore.loadRefreshInterval().seconds)
         return Timeline(entries: [e], policy: .after(next))
     }
 
     /// Snapshot/placeholder path: read whatever's already in the store (no network).
-    private func entry(for configuration: SelectLocationIntent) -> WeatherEntry {
+    private func entry(for configuration: WeatherStyleIntent) -> WeatherEntry {
         let loc = resolveWidgetLocation(configuration)
         let aemet = WidgetStore.loadAemet(code: loc.code) ?? WidgetStore.loadAemet()
-        return WeatherEntry(date: Date(), aemet: aemet)
+        return WeatherEntry(date: Date(), aemet: aemet, background: configuration.background)
     }
 
     /// Timeline path: try a live fetch for the configured city, write it back to the
     /// shared store (so the app and sibling widgets benefit), and fall back to the stored
     /// snapshot when offline / rate-limited. The AEMET warning badge is carried over from
     /// the stored snapshot (the widget can't fetch it).
-    private func freshEntry(for loc: SavedLocation) async -> WeatherEntry {
+    private func freshEntry(for loc: SavedLocation, background: TempBackground) async -> WeatherEntry {
         let stored = WidgetStore.loadAemet(code: loc.code) ?? WidgetStore.loadAemet()
         let fresh = await freshSnapshot(for: loc, alert: stored?.alert)
         if let fresh {
             WidgetStore.save(aemet: fresh, forCode: loc.code)
         }
-        return WeatherEntry(date: Date(), aemet: fresh ?? stored)
+        return WeatherEntry(date: Date(), aemet: fresh ?? stored, background: background)
     }
 
     /// A newly fetched snapshot for `loc`, from AEMET when a key is configured and from
@@ -94,7 +95,21 @@ struct WeatherWidgetView: View {
             default:           medium
             }
         }
-        .containerBackground(for: .widget) { WidgetTheme.heroGradient }
+        // Full-bleed frame + widgetURL *before* containerBackground so the whole tap area
+        // (every family, incl. large) opens the app's Tiempo/AEMET tab. Applied after the
+        // background, large/medium sometimes drop the URL and the tap just reopens the app.
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .widgetURL(WidgetDeepLink.url(WidgetDeepLink.aemet))
+        .containerBackground(for: .widget) { background }
+    }
+
+    /// Green like the rest of the app, or the current temperature's own colour — the same
+    /// option the Netatmo widget offers, driven here by the AEMET reading the widget already shows.
+    @ViewBuilder private var background: some View {
+        switch entry.background {
+        case .temperature: TempPalette.gradient(for: currentTemp.map(Double.init))
+        case .theme:       WidgetTheme.heroGradient
+        }
     }
 
     // The big number, and the same chain the app's Tiempo hero uses (station reading →
@@ -109,6 +124,22 @@ struct WeatherWidgetView: View {
 
     private var locationTitle: String {
         entry.aemet?.municipio ?? "—"
+    }
+
+    /// VoiceOver phrase for the big temperature (the bare "44°" otherwise reads without context).
+    private var currentTempAccessibility: Text {
+        currentTemp.map { Text("Temperatura actual \($0) grados") }
+            ?? Text("Temperatura actual no disponible")
+    }
+
+    /// VoiceOver phrase for a máx/mín pair; nil when neither is present.
+    private var maxMinAccessibility: Text? {
+        let mx = entry.aemet?.tempMax, mn = entry.aemet?.tempMin
+        guard mx != nil || mn != nil else { return nil }
+        var parts: [String] = []
+        if let mx { parts.append("máxima \(mx) grados") }
+        if let mn { parts.append("mínima \(mn) grados") }
+        return Text(parts.joined(separator: ", "))
     }
 
     /// Drops today's already-elapsed hours so a stale snapshot still advances
@@ -172,11 +203,13 @@ struct WeatherWidgetView: View {
                 HStack(alignment: .top, spacing: 4) {
                     Text(currentTemp.map { "\($0)°" } ?? "—")
                         .font(.system(size: 44, weight: .regular)).foregroundStyle(.white)
+                        .accessibilityLabel(currentTempAccessibility)
                     if let code = entry.aemet?.skyCode {
                         Image(systemName: SkyIcon.symbol(for: code))
                             .font(.title3)
                             .foregroundStyle(.white, SkyIcon.color(for: code))
                             .padding(.top, 6)
+                            .accessibilityHidden(true)   // the condition text below reads it
                     }
                 }
                 if let a = entry.aemet {
@@ -194,6 +227,8 @@ struct WeatherWidgetView: View {
                         }
                     }
                     .font(.caption.weight(.medium)).labelStyle(.titleAndIcon)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(maxMinAccessibility ?? Text(""))
                 }
                 if entry.aemet?.humidity != nil || entry.aemet?.windKmh != nil {
                     HStack(spacing: 8) {
@@ -322,11 +357,13 @@ struct WeatherWidgetView: View {
             HStack(alignment: .top, spacing: 6) {
                 Text(currentTemp.map { "\($0)°" } ?? "—")
                     .font(.system(size: tempSize, weight: .regular)).foregroundStyle(.white)
+                    .accessibilityLabel(currentTempAccessibility)
                 if let code = entry.aemet?.skyCode {
                     Image(systemName: SkyIcon.symbol(for: code))
                         .font(.title2)
                         .foregroundStyle(.white, SkyIcon.color(for: code))
                         .padding(.top, tempSize * 0.18)
+                        .accessibilityHidden(true)   // the condition text below reads it
                 }
             }
             if let a = entry.aemet {
@@ -352,6 +389,8 @@ struct WeatherWidgetView: View {
                 }
                 .font(maxMinFont)
                 .labelStyle(.titleAndIcon)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(maxMinAccessibility ?? Text(""))
             }
             if let a = entry.aemet {
                 if let h = a.humidity {
@@ -398,6 +437,17 @@ struct WeatherWidgetView: View {
                 Text(" ").font(.system(size: 9))
             }
         }
+        // Read the column as one phrase instead of "14", "18°", "20%" in isolation.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(hourAccessibility(h))
+    }
+
+    /// One coherent VoiceOver phrase for an hour column.
+    private func hourAccessibility(_ h: AemetHourPoint) -> Text {
+        let when = h.isToday ? "\(h.hour) horas" : weekday(forHour: h)
+        var s = "\(when), \(h.temp) grados"
+        if let p = h.prob, p > 0 { s += ", \(p) por ciento de probabilidad de lluvia" }
+        return Text(s)
     }
 
     private func dayRow(_ d: AemetDayPoint, weekMin: Int, weekMax: Int) -> some View {
@@ -427,6 +477,18 @@ struct WeatherWidgetView: View {
                 .font(.subheadline.weight(.semibold)).foregroundStyle(.white)
                 .frame(width: 30, alignment: .leading)
         }
+        // Read the whole row as one phrase instead of "Lun", "12°", "24°" separately.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(dayAccessibility(d))
+    }
+
+    /// One coherent VoiceOver phrase for a daily row.
+    private func dayAccessibility(_ d: AemetDayPoint) -> Text {
+        var s = weekday(d.date)
+        if let mn = d.tempMin { s += ", mínima \(mn) grados" }
+        if let mx = d.tempMax { s += ", máxima \(mx) grados" }
+        if let p = d.prob, p > 0 { s += ", \(p) por ciento de probabilidad de lluvia" }
+        return Text(s)
     }
 
     /// Apple-style horizontal min–max bar, sized to the week's overall range.
@@ -485,11 +547,11 @@ struct WeatherWidget: Widget {
     let kind = "AppPersonalWeatherWidget"
 
     var body: some WidgetConfiguration {
-        AppIntentConfiguration(kind: kind, intent: SelectLocationIntent.self, provider: WeatherProvider()) { entry in
+        AppIntentConfiguration(kind: kind, intent: WeatherStyleIntent.self, provider: WeatherProvider()) { entry in
             WeatherWidgetView(entry: entry)
         }
         .configurationDisplayName("Tiempo")
-        .description("Pronóstico AEMET: temperatura actual de la estación, por horas y próximos días. Elige la ciudad en «Editar widget».")
+        .description("Pronóstico AEMET: temperatura actual de la estación, por horas y próximos días. Elige la ciudad y el fondo en «Editar widget».")
         .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
     }
 }

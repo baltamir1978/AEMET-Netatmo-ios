@@ -18,7 +18,9 @@ struct WidgetLocationEntity: AppEntity {
 
 struct WidgetLocationQuery: EntityQuery {
     func entities(for identifiers: [String]) async throws -> [WidgetLocationEntity] {
-        let all = Self.allOptions()
+        // `.followApp` is no longer *offered* (see `suggestedEntities`), but it stays
+        // resolvable so a widget a user configured with it before still decodes and works.
+        let all = Self.allOptions() + [.followApp]
         return identifiers.compactMap { id in all.first { $0.id == id } }
     }
 
@@ -26,17 +28,26 @@ struct WidgetLocationQuery: EntityQuery {
         Self.allOptions()
     }
 
-    func defaultResult() async -> WidgetLocationEntity? { .followApp }
+    func defaultResult() async -> WidgetLocationEntity? { .gps }
 
+    /// "📍 Ubicación actual" plus every followed city. "Seguir la app" was dropped: it
+    /// duplicated "Ubicación actual" whenever the app itself was set to the GPS location,
+    /// and the followed-city list already covers pinning the widget to a fixed town.
     static func allOptions() -> [WidgetLocationEntity] {
-        [.followApp, .gps] + WidgetStore.loadLocations().map {
+        [.gps] + WidgetStore.loadLocations().map {
             WidgetLocationEntity(id: $0.code, name: $0.name)
         }
     }
 }
 
-/// Configuration intent backing both widgets ("Editar widget" → Ubicación).
-struct SelectLocationIntent: WidgetConfigurationIntent {
+/// Any configuration intent that lets the user pick a location — so `resolveWidgetLocation`
+/// works for both the Sol·Luna widget (location only) and the Tiempo widget (location + fondo).
+protocol LocationSelectingIntent {
+    var location: WidgetLocationEntity? { get }
+}
+
+/// Configuration intent for the Sol·Luna widget ("Editar widget" → Ubicación).
+struct SelectLocationIntent: WidgetConfigurationIntent, LocationSelectingIntent {
     static var title: LocalizedStringResource = "Ubicación"
     static var description = IntentDescription("Elige la ciudad que muestra el widget, o usa tu ubicación actual.")
 
@@ -47,8 +58,10 @@ struct SelectLocationIntent: WidgetConfigurationIntent {
 }
 
 /// Resolve the configured option to a concrete `SavedLocation`.
-func resolveWidgetLocation(_ intent: SelectLocationIntent) -> SavedLocation {
-    switch intent.location?.id ?? "__app__" {
+/// Nil (a freshly added widget) now defaults to the GPS location; "__app__" is only
+/// reached by widgets a user configured before "Seguir la app" was retired.
+func resolveWidgetLocation(_ intent: some LocationSelectingIntent) -> SavedLocation {
+    switch intent.location?.id ?? SavedLocation.currentCode {
     case "__app__":
         return WidgetStore.selectedLocation()
     case SavedLocation.currentCode:
@@ -58,18 +71,19 @@ func resolveWidgetLocation(_ intent: SelectLocationIntent) -> SavedLocation {
     }
 }
 
-// MARK: - Netatmo widget style
+// MARK: - Temperature-coloured background
 
-/// Background of the Netatmo widget: the app's green, or a colour driven by the outdoor
-/// temperature (deep blue near zero → violet at 40-45°). Offered as an option rather than
-/// imposed: the colour is striking, but it also makes the widget change look every few hours.
-enum NetatmoBackground: String, AppEnum {
+/// Widget background: the app's green, or a colour driven by the current temperature
+/// (deep blue near zero → deep red at 40-45°, see `TempPalette`). Offered as an option rather
+/// than imposed: the colour is striking, but it also makes the widget change look every few
+/// hours. Shared by the Netatmo widget (outdoor temp) and the Tiempo widget (AEMET temp).
+enum TempBackground: String, AppEnum {
     case theme        // green, like the rest of the app
-    case temperature  // colour by outdoor temperature
+    case temperature  // colour by current temperature
 
     static var typeDisplayRepresentation: TypeDisplayRepresentation { "Fondo" }
 
-    static var caseDisplayRepresentations: [NetatmoBackground: DisplayRepresentation] = [
+    static var caseDisplayRepresentations: [TempBackground: DisplayRepresentation] = [
         .theme:       DisplayRepresentation(title: "Verde"),
         .temperature: DisplayRepresentation(title: "Color según la temperatura"),
     ]
@@ -81,7 +95,21 @@ struct NetatmoStyleIntent: WidgetConfigurationIntent {
     static var description = IntentDescription("Elige si el fondo sigue el verde de la app o cambia con la temperatura exterior.")
 
     @Parameter(title: "Fondo", default: .theme)
-    var background: NetatmoBackground
+    var background: TempBackground
+
+    init() {}
+}
+
+/// Configuration intent for the Tiempo widget: pick the city *and* the background style.
+struct WeatherStyleIntent: WidgetConfigurationIntent, LocationSelectingIntent {
+    static var title: LocalizedStringResource = "Tiempo"
+    static var description = IntentDescription("Elige la ciudad y si el fondo sigue el verde de la app o cambia con la temperatura.")
+
+    @Parameter(title: "Ubicación")
+    var location: WidgetLocationEntity?
+
+    @Parameter(title: "Fondo", default: .theme)
+    var background: TempBackground
 
     init() {}
 }

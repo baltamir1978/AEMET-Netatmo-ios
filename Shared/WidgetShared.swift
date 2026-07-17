@@ -6,6 +6,24 @@ import SwiftUI
 /// Mirrors the bundle id prefix (`Altamirano.AppPersonal`).
 let appGroupID = "group.Altamirano.AppPersonal"
 
+// MARK: - Widget deep links
+
+/// URLs a widget tap opens in the app. The scheme needn't be registered in Info.plist:
+/// WidgetKit already knows the widget belongs to this app and delivers the URL to
+/// `onOpenURL`. The app maps each host onto the matching tab (and, for tides, scrolls to
+/// the Mareas card inside Sol·Luna). Shared so the widgets and the app agree on the hosts.
+enum WidgetDeepLink {
+    static let scheme = "tiempoes"
+
+    /// Widget → app-section hosts.
+    static let aemet   = "aemet"    // Tiempo / AEMET tab
+    static let netatmo = "netatmo"  // Actual tab
+    static let tides   = "tides"    // Sol·Luna tab, scrolled to Mareas
+    static let cosmos  = "cosmos"   // Sol·Luna tab
+
+    static func url(_ host: String) -> URL { URL(string: "\(scheme)://\(host)")! }
+}
+
 // MARK: - Saved location
 
 /// A location the user follows: AEMET forecast code + coordinates for sun/moon.

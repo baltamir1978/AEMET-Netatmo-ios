@@ -1,6 +1,9 @@
 {
   "sourceLanguage" : "es",
   "strings" : {
+    "" : {
+
+    },
     " " : {
 
     },
@@ -412,6 +415,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Escolle a cidade que mostra o widget, ou usa a túa localización actual."
+          }
+        }
+      }
+    },
+    "Elige la ciudad y si el fondo sigue el verde de la app o cambia con la temperatura." : {
+      "localizations" : {
+        "ca" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tria la ciutat i si el fons segueix el verd de l'app o canvia amb la temperatura."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose the city and whether the background follows the app's green or changes with the temperature."
+          }
+        },
+        "eu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aukeratu hiria eta atzeko planoak aplikazioaren berdea jarraitzen duen edo tenperaturarekin aldatzen den."
+          }
+        },
+        "gl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Escolle a cidade e se o fondo segue o verde da app ou cambia coa temperatura."
           }
         }
       }
@@ -994,6 +1025,7 @@
       }
     },
     "Pronóstico AEMET: temperatura actual de la estación, por horas y próximos días. Elige la ciudad en «Editar widget»." : {
+      "extractionState" : "stale",
       "localizations" : {
         "ca" : {
           "stringUnit" : {
@@ -1017,6 +1049,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Prognóstico AEMET: temperatura actual da estación, por horas e vindeiros días. Escolle a cidade en «Editar widget»."
+          }
+        }
+      }
+    },
+    "Pronóstico AEMET: temperatura actual de la estación, por horas y próximos días. Elige la ciudad y el fondo en «Editar widget»." : {
+      "localizations" : {
+        "ca" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pronòstic AEMET: temperatura actual de l'estació, per hores i pròxims dies. Tria la ciutat i el fons a «Edita el widget»."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "AEMET forecast: the station's current temperature, hourly and coming days. Pick the city and background in «Edit widget»."
+          }
+        },
+        "eu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "AEMET iragarpena: estazioaren uneko tenperatura, orduka eta hurrengo egunetakoa. Aukeratu hiria eta atzeko planoa «Editatu widgeta» atalean."
+          }
+        },
+        "gl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Prognóstico AEMET: temperatura actual da estación, por horas e vindeiros días. Escolle a cidade e o fondo en «Editar widget»."
           }
         }
       }
@@ -1190,6 +1250,12 @@
           }
         }
       }
+    },
+    "Temperatura actual %lld grados" : {
+
+    },
+    "Temperatura actual no disponible" : {
+
     },
     "Tiempo" : {
       "localizations" : {

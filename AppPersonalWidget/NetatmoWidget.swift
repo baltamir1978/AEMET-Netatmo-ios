@@ -16,7 +16,7 @@ import SwiftUI
 struct NetatmoEntry: TimelineEntry {
     let date: Date
     let snap: NetatmoSnapshot?
-    var background: NetatmoBackground = .theme
+    var background: TempBackground = .theme
 }
 
 struct NetatmoProvider: AppIntentTimelineProvider {
@@ -134,6 +134,10 @@ struct NetatmoWidgetView: View {
                 placeholder
             }
         }
+        // Full-bleed frame + widgetURL before containerBackground so every family (incl.
+        // large) reliably opens the app's Actual (Netatmo) tab on tap.
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .widgetURL(WidgetDeepLink.url(WidgetDeepLink.netatmo))
         .containerBackground(for: .widget) { background }
     }
 

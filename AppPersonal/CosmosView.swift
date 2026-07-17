@@ -1,6 +1,13 @@
 import SwiftUI
 
 struct CosmosView: View {
+    /// Incremented by a tides-widget tap (via `ContentView`) to request a scroll to the
+    /// Mareas card. Every increment is a fresh request, so re-tapping scrolls again.
+    var scrollToTidesSignal: Int = 0
+    /// A tap that arrived before the tides finished loading; retried once `tidesPair` fills.
+    @State private var pendingTidesScroll = false
+    private static let tidesAnchor = "tidesCard"
+
     @State private var selectedDate = Date()
     @ObservedObject private var store = LocationStore.shared
     @AppStorage("tide_station_id") private var selectedTideStationId = "4"
@@ -42,17 +49,23 @@ struct CosmosView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: 14) {
-                    if isLoading { ProgressView().padding(6) }
-                    if let sm = sunMoon { sunMoonCard(sm) }
-                    if moonPhases?.isEmpty == false || astroEvents?.isEmpty == false {
-                        moonCalendarCard(moonPhases ?? [])
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(spacing: 14) {
+                        if isLoading { ProgressView().padding(6) }
+                        if let sm = sunMoon { sunMoonCard(sm) }
+                        if moonPhases?.isEmpty == false || astroEvents?.isEmpty == false {
+                            moonCalendarCard(moonPhases ?? [])
+                        }
+                        if let t = tidesPair { tidesCard(t).id(Self.tidesAnchor) }
                     }
-                    if let t = tidesPair { tidesCard(t) }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 4)
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 4)
+                .onChange(of: scrollToTidesSignal) { _, _ in scrollToTides(proxy) }
+                .onChange(of: tidesPair == nil) { _, isNil in
+                    if !isNil && pendingTidesScroll { scrollToTides(proxy) }
+                }
             }
             .navigationTitle("Sol · Luna")
             .navigationBarTitleDisplayMode(.inline)
@@ -343,6 +356,17 @@ struct CosmosView: View {
     }
 
     // MARK: - Tides card
+
+    /// Scroll the Sol·Luna list down to the Mareas card. If the tides haven't loaded yet
+    /// (the tap can beat the fetch) we mark it pending and retry when `tidesPair` fills.
+    /// The small delay lets the tab-switch settle before the scroll animates.
+    private func scrollToTides(_ proxy: ScrollViewProxy) {
+        guard tidesPair != nil else { pendingTidesScroll = true; return }
+        pendingTidesScroll = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            withAnimation(.easeInOut) { proxy.scrollTo(Self.tidesAnchor, anchor: .top) }
+        }
+    }
 
     private func tidesCard(_ pair: TidesDayPair) -> some View {
         VStack(spacing: 0) {

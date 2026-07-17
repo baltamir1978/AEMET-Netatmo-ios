@@ -75,10 +75,14 @@ struct SunMoonWidgetView: View {
     let entry: SunMoonEntry
 
     var body: some View {
-        switch family {
-        case .systemSmall: small
-        default:           medium
+        Group {
+            switch family {
+            case .systemSmall: small
+            default:           medium
+            }
         }
+        // Tapping the widget opens the app's Sol·Luna tab.
+        .widgetURL(WidgetDeepLink.url(WidgetDeepLink.cosmos))
     }
 
     private var small: some View {

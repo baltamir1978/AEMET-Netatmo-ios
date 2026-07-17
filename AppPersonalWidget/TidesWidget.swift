@@ -225,9 +225,10 @@ struct TidesWidgetView: View {
 
     private var nowMinutes: Double { entry.date.timeIntervalSince(entry.dayStart) / 60 }
 
-    // A 12-hour window centred a little behind "now" so both the last and the
-    // upcoming tide are visible, with the marker about a quarter from the left.
-    private var window: ClosedRange<Double> { (nowMinutes - 180)...(nowMinutes + 540) }
+    // Kept only to read the current height (smooth cosine curve through the extrema);
+    // the widget no longer draws the 12h curve, it draws a beach whose water level is
+    // that height. A wide window so the interpolation always has extrema on both sides.
+    private var window: ClosedRange<Double> { (nowMinutes - 360)...(nowMinutes + 720) }
     private var curve: TideCurve { TideCurve(extrema: entry.extrema, domain: window) }
 
     /// Daytime when "now" sits between the station's sunrise and sunset.
@@ -237,14 +238,9 @@ struct TidesWidgetView: View {
         return m >= rise && m <= set
     }
 
-    /// Lighter green by day, deeper green by night.
-    private var background: LinearGradient {
-        isDay
-            ? LinearGradient(colors: [WidgetTheme.greenBright, WidgetTheme.green],
-                             startPoint: .top, endPoint: .bottom)
-            : LinearGradient(colors: [WidgetTheme.greenDeep, Color(red: 0.02, green: 0.20, blue: 0.16)],
-                             startPoint: .top, endPoint: .bottom)
-    }
+    private var currentHeight: Double { curve.height(at: nowMinutes) }
+    private var next: TideExtreme? { curve.nextExtreme(after: nowMinutes) }
+    private var rising: Bool { next?.isHigh ?? false }
 
     var body: some View {
         Group {
@@ -257,29 +253,120 @@ struct TidesWidgetView: View {
                 unavailable
             }
         }
-        .containerBackground(for: .widget) { background }
+        // Full-bleed frame + widgetURL before containerBackground so every family (incl.
+        // large) reliably opens the Mareas card in the app's Sol·Luna tab on tap.
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .widgetURL(WidgetDeepLink.url(WidgetDeepLink.tides))
+        .containerBackground(for: .widget) { beach }
     }
 
-    private var currentHeight: Double { curve.height(at: nowMinutes) }
-    private var next: TideExtreme? { curve.nextExtreme(after: nowMinutes) }
-    private var rising: Bool { next?.isHigh ?? false }
+    // MARK: - Beach background (water level ∝ current tide within the day's range)
+
+    /// Sand (top) → water (bottom), the waterline at a height set by the current tide:
+    /// near the day's high the widget is mostly water, near the low it's mostly sand.
+    /// The surface carries a soft, fixed ripple (widgets don't animate).
+    @ViewBuilder private var beach: some View {
+        GeometryReader { geo in
+            let w = geo.size.width, h = geo.size.height
+            let heights = entry.extrema.map(\.height)
+            let dayLow = heights.min() ?? 0
+            let dayHigh = heights.max() ?? (dayLow + 1)
+            let f = max(0, min(1, (currentHeight - dayLow) / max(0.01, dayHigh - dayLow)))
+            let levelY = h * (1 - (0.10 + 0.80 * f))   // 10% water at the low → 90% at the high
+            let pts = surfacePoints(w: w, h: h, levelY: levelY)
+
+            ZStack {
+                LinearGradient(colors: sandColors, startPoint: .top, endPoint: .bottom)
+                // Darker wet-sand band right above the waterline reads as the shoreline.
+                Rectangle().fill(wetSand).opacity(0.5)
+                    .frame(height: 12).position(x: w / 2, y: levelY - 3)
+                waterPath(pts, w: w, h: h)
+                    .fill(LinearGradient(colors: waterColors, startPoint: .top, endPoint: .bottom))
+                ripplePath(pts, dy: 5)
+                    .stroke(foam.opacity(0.22), style: StrokeStyle(lineWidth: 1.2, lineCap: .round))
+                ripplePath(pts, dy: 0)
+                    .stroke(foam.opacity(0.9), style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                // Sun by day / moon by night, in the "sky" over the beach.
+                ZStack {
+                    Circle().fill(isDay ? WidgetTheme.sun : Color(red: 0.93, green: 0.95, blue: 1.0))
+                        .frame(width: 28, height: 28)
+                    Image(systemName: isDay ? "sun.max.fill" : "moon.fill")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(isDay ? .orange : .indigo)
+                }
+                .position(x: w - 24, y: 24)
+            }
+        }
+        .accessibilityHidden(true)   // decorative; the labels below carry the reading
+    }
+
+    private func surfacePoints(w: CGFloat, h: CGFloat, levelY: CGFloat) -> [CGPoint] {
+        let steps = max(40, Int(w / 3))
+        let amp = max(0.5, h * 0.005)        // gentle ripple, not chop
+        let lambda = 24.0, phase = 0.6       // long wavelength; fixed phase (static widget)
+        return (0...steps).map { i in
+            let x = w * CGFloat(i) / CGFloat(steps)
+            let d = Double(x)
+            let y = levelY
+                + CGFloat(sin(d / lambda + phase)) * amp
+                + CGFloat(sin(d / (lambda * 0.6) - phase * 1.2)) * amp * 0.4
+            return CGPoint(x: x, y: y)
+        }
+    }
+
+    private func waterPath(_ pts: [CGPoint], w: CGFloat, h: CGFloat) -> Path {
+        var p = Path()
+        guard let first = pts.first else { return p }
+        p.move(to: CGPoint(x: 0, y: h))
+        p.addLine(to: first)
+        pts.dropFirst().forEach { p.addLine(to: $0) }
+        p.addLine(to: CGPoint(x: w, y: h))
+        p.closeSubpath()
+        return p
+    }
+
+    private func ripplePath(_ pts: [CGPoint], dy: CGFloat) -> Path {
+        var p = Path()
+        guard let first = pts.first else { return p }
+        p.move(to: CGPoint(x: first.x, y: first.y + dy))
+        pts.dropFirst().forEach { p.addLine(to: CGPoint(x: $0.x, y: $0.y + dy)) }
+        return p
+    }
+
+    // Beach tones: warm yellow sand and a sunny/deep sea, dimmed at night.
+    private var sandColors: [Color] {
+        isDay ? [Color(red: 0.925, green: 0.835, blue: 0.537), Color(red: 0.831, green: 0.706, blue: 0.373)]
+              : [Color(red: 0.514, green: 0.416, blue: 0.251), Color(red: 0.357, green: 0.278, blue: 0.157)]
+    }
+    private var waterColors: [Color] {
+        isDay ? [Color(red: 0.227, green: 0.643, blue: 0.867), Color(red: 0.047, green: 0.353, blue: 0.573)]
+              : [Color(red: 0.122, green: 0.435, blue: 0.627), Color(red: 0.024, green: 0.165, blue: 0.271)]
+    }
+    private var foam: Color {
+        isDay ? Color(red: 0.918, green: 0.969, blue: 1.0) : Color(red: 0.812, green: 0.918, blue: 0.984)
+    }
+    private var wetSand: Color { sandColors[1] }
+
+    // Text sits on either sand or water, so every label gets a soft shadow.
+    private let textShadow = Color.black.opacity(0.4)
 
     // MARK: Small
 
     private var small: some View {
         VStack(alignment: .leading, spacing: 6) {
             Label(entry.stationName, systemImage: "water.waves")
-                .font(.caption2.weight(.semibold)).foregroundStyle(.white.opacity(0.9))
+                .font(.caption2.weight(.semibold)).foregroundStyle(.white)
                 .lineLimit(1)
             HStack(spacing: 4) {
                 Image(systemName: rising ? "arrow.up.right" : "arrow.down.right")
                 Text(String(format: "%.1f m", currentHeight))
             }
             .font(.headline).foregroundStyle(.white)
-            curveChart.frame(maxHeight: .infinity)
+            Spacer(minLength: 0)
             sunRow
-            nextLabel.font(.caption2).foregroundStyle(.white.opacity(0.85)).lineLimit(1)
+            nextLabel.font(.caption2).foregroundStyle(.white).lineLimit(1)
         }
+        .shadow(color: textShadow, radius: 2, x: 0, y: 1)
         .padding(12)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
@@ -287,28 +374,24 @@ struct TidesWidgetView: View {
     // MARK: Medium
 
     private var medium: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Label(entry.stationName, systemImage: "water.waves")
-                        .font(.subheadline.weight(.semibold)).foregroundStyle(.white).lineLimit(1)
-                    sunRow
-                }
-                Spacer(minLength: 8)
-                HStack(spacing: 4) {
-                    Image(systemName: rising ? "arrow.up.right" : "arrow.down.right")
-                    Text(String(format: "%.2f m", currentHeight))
-                }
-                .font(.headline).foregroundStyle(.white)
+        VStack(alignment: .leading, spacing: 2) {
+            Label(entry.stationName, systemImage: "water.waves")
+                .font(.subheadline.weight(.semibold)).foregroundStyle(.white).lineLimit(1)
+            HStack(spacing: 4) {
+                Image(systemName: rising ? "arrow.up.right" : "arrow.down.right")
+                Text(String(format: "%.2f m", currentHeight))
             }
-            curveChart.frame(maxHeight: .infinity)
+            .font(.title3.weight(.bold)).foregroundStyle(.white)
+            sunRow
+            Spacer(minLength: 0)
             HStack {
                 Text(rising ? "Subiendo" : "Bajando")
-                    .font(.caption2.weight(.medium)).foregroundStyle(.white.opacity(0.85))
+                    .font(.caption2.weight(.medium)).foregroundStyle(.white)
                 Spacer()
-                nextLabel.font(.caption2).foregroundStyle(.white.opacity(0.85))
+                nextLabel.font(.caption2).foregroundStyle(.white)
             }
         }
+        .shadow(color: textShadow, radius: 2, x: 0, y: 1)
         .padding(16)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
@@ -326,7 +409,7 @@ struct TidesWidgetView: View {
                     Text(timeLabel(set))
                 }
             }
-            .font(.caption2).foregroundStyle(.white.opacity(0.85))
+            .font(.caption2).foregroundStyle(.white)
         }
     }
 
@@ -336,67 +419,6 @@ struct TidesWidgetView: View {
                 Text(n.isHigh ? "🌊 Pleamar" : "🏖️ Bajamar")
                 Text(timeLabel(n.minutes))
                 Text(String(format: "· %.1f m", n.height))
-            }
-        }
-    }
-
-    // MARK: Curve drawing
-
-    private var curveChart: some View {
-        GeometryReader { geo in
-            let w = geo.size.width, h = geo.size.height
-            let range = curve.visibleRange
-            let span = max(0.01, range.max - range.min)
-            let xOf: (Double) -> CGFloat = { m in
-                CGFloat((m - window.lowerBound) / (window.upperBound - window.lowerBound)) * w
-            }
-            let yOf: (Double) -> CGFloat = { ht in
-                h - CGFloat((ht - range.min) / span) * h
-            }
-            let samples = 72
-            let pts: [CGPoint] = (0...samples).map { i in
-                let m = window.lowerBound + (window.upperBound - window.lowerBound) * Double(i) / Double(samples)
-                return CGPoint(x: xOf(m), y: yOf(curve.height(at: m)))
-            }
-            let nowX = xOf(nowMinutes)
-            let nowY = yOf(currentHeight)
-
-            ZStack {
-                // Filled area under the curve.
-                Path { p in
-                    guard let f = pts.first else { return }
-                    p.move(to: CGPoint(x: f.x, y: h))
-                    p.addLine(to: f)
-                    pts.dropFirst().forEach { p.addLine(to: $0) }
-                    p.addLine(to: CGPoint(x: pts.last!.x, y: h))
-                    p.closeSubpath()
-                }
-                .fill(LinearGradient(colors: [.white.opacity(0.28), .white.opacity(0.04)],
-                                     startPoint: .top, endPoint: .bottom))
-                // The curve line.
-                Path { p in
-                    guard let f = pts.first else { return }
-                    p.move(to: f)
-                    pts.dropFirst().forEach { p.addLine(to: $0) }
-                }
-                .stroke(.white, style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
-                // "Now" marker: vertical guide + dot.
-                Path { p in
-                    p.move(to: CGPoint(x: nowX, y: 0))
-                    p.addLine(to: CGPoint(x: nowX, y: h))
-                }
-                .stroke(.white.opacity(0.4), style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
-                // "Now" marker: a sun by day, a moon by night.
-                ZStack {
-                    Circle()
-                        .fill(isDay ? WidgetTheme.sun : Color(red: 0.93, green: 0.95, blue: 1.0))
-                        .frame(width: 20, height: 20)
-                        .shadow(color: (isDay ? WidgetTheme.sun : .white).opacity(0.6), radius: 4)
-                    Image(systemName: isDay ? "sun.max.fill" : "moon.fill")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(isDay ? .orange : .indigo)
-                }
-                .position(x: nowX, y: nowY)
             }
         }
     }

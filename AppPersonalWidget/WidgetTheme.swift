@@ -13,25 +13,33 @@ enum WidgetTheme {
     )
 }
 
-/// Temperature → colour, for the Netatmo widget's "colour by temperature" background.
+/// Temperature → colour, for the "colour by temperature" widget background.
 ///
 /// Anchored on how the temperature *feels* rather than on an even split: freezing is deep
-/// blue, the comfortable teens are green, and it warms through amber and red into violet at
-/// the 40-45° end (violet reads as "off the scale" — hotter than plain red can say).
-/// Colours are deliberately dark: the widget draws white text on top and must stay legible.
+/// blue, the comfortable teens are green, and it warms through gold and orange into a deep
+/// blood red at the 40-45° end (red keeps deepening rather than veering to violet — the heat
+/// reading "off the scale" without changing hue family). Colours are deliberately dark: the
+/// widget draws white text on top and must stay legible.
 enum TempPalette {
-    // Saturated on purpose: a first pass with muted stops interpolated into mud (28° came
-    // out an ochre brown). These stay vivid through the mid-range, where the temperature
-    // actually spends most of the year.
+    // 15 stops (was 8): the extra ones smooth the transitions and, crucially, add a
+    // green-lime bridge at 21° that kills the olive mud the old green→gold jump produced.
+    // Saturated on purpose through the mid-range, where the temperature spends most of the year.
     private static let stops: [(t: Double, c: (r: Double, g: Double, b: Double))] = [
-        (-10, (0.10, 0.13, 0.42)),   // hielo — azul noche
-        (  0, (0.11, 0.32, 0.78)),   // cero — azul intenso
-        ( 10, (0.08, 0.58, 0.72)),   // fresco — turquesa
-        ( 18, (0.12, 0.66, 0.45)),   // templado — verde (la casa)
-        ( 25, (0.95, 0.66, 0.15)),   // cálido — dorado
-        ( 32, (0.94, 0.40, 0.10)),   // calor — naranja
-        ( 38, (0.87, 0.16, 0.22)),   // mucho calor — rojo
-        ( 45, (0.58, 0.10, 0.58)),   // extremo — violeta
+        (-10, (0.10, 0.14, 0.40)),   // hielo — azul noche
+        ( -5, (0.11, 0.24, 0.60)),   // muy frío — azul
+        (  0, (0.12, 0.34, 0.80)),   // cero — azul intenso
+        (  5, (0.10, 0.48, 0.78)),   // frío — azul-turquesa
+        ( 10, (0.08, 0.60, 0.75)),   // fresco — turquesa
+        ( 14, (0.10, 0.64, 0.60)),   // suave — verde-turquesa
+        ( 18, (0.14, 0.68, 0.46)),   // templado — verde (la casa)
+        ( 21, (0.58, 0.74, 0.22)),   // cálido — verde-lima (puente, sin oliva)
+        ( 24, (0.92, 0.74, 0.12)),   // cálido — dorado
+        ( 27, (0.97, 0.58, 0.10)),   // caluroso — ámbar
+        ( 30, (0.98, 0.44, 0.10)),   // calor — naranja
+        ( 34, (0.94, 0.26, 0.12)),   // mucho calor — naranja-rojo
+        ( 38, (0.88, 0.14, 0.16)),   // sofocante — rojo
+        ( 42, (0.72, 0.08, 0.12)),   // extremo — rojo profundo
+        ( 45, (0.54, 0.04, 0.10)),   // extremo — rojo sangre
     ]
 
     /// Linear interpolation between the two surrounding stops; clamps outside the range.
