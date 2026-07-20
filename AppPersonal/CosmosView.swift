@@ -8,6 +8,7 @@ struct CosmosView: View {
     @State private var pendingTidesScroll = false
     private static let tidesAnchor = "tidesCard"
 
+    @Environment(\.colorScheme) private var colorScheme
     @State private var selectedDate = Date()
     @ObservedObject private var store = LocationStore.shared
     @AppStorage("tide_station_id") private var selectedTideStationId = "4"
@@ -155,7 +156,7 @@ struct CosmosView: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
-            .background(Color(red: 0.10, green: 0.14, blue: 0.22).opacity(0.05))
+            .background(Color.primary.opacity(0.05))
         }
         .background(.background)
         .clipShape(RoundedRectangle(cornerRadius: 12))
@@ -191,9 +192,7 @@ struct CosmosView: View {
         }
         // Alternate row tint by phase kind (like the tides list): new = cool, full = warm.
         // Past phases stay visible but greyed.
-        let kindColor = phase.kind == .new
-            ? Color(red: 0.93, green: 0.94, blue: 0.99)
-            : Color(red: 1.0, green: 0.98, blue: 0.88)
+        let kindColor = phase.kind == .new ? AppTheme.rowLilac : AppTheme.rowWarm
         let isPast = days < 0
         return HStack(spacing: 12) {
             Text(phase.emoji).font(.title2)
@@ -208,11 +207,11 @@ struct CosmosView: View {
             }
         }
         .padding(.horizontal, 12).padding(.vertical, 8)
-        .background(days == 0 ? AppTheme.greenSoft : (isPast ? Color(.systemGray6) : kindColor))
+        .background(days == 0 ? AppTheme.greenSoft : (isPast ? AppTheme.rowNeutral : kindColor))
         .clipShape(RoundedRectangle(cornerRadius: 10))
         .overlay(RoundedRectangle(cornerRadius: 10)
             .stroke(days == 0 ? AppTheme.green.opacity(0.4) : Color.clear))
-        .opacity(isPast ? 0.6 : 1)
+        .opacity(isPast ? pastRowOpacity : 1)
     }
 
     // MARK: - Moon mini-calendar
@@ -284,6 +283,11 @@ struct CosmosView: View {
         esCal.startOfDay(for: day) < esCal.startOfDay(for: Date())
     }
 
+    /// How much to fade elapsed days/rows. Dimming that reads as "past" on white turns
+    /// into unreadable grey-on-black, so dark mode fades less.
+    private var pastOpacity: Double { colorScheme == .dark ? 0.65 : 0.4 }
+    private var pastRowOpacity: Double { colorScheme == .dark ? 0.8 : 0.6 }
+
     private func moonDayCell(_ day: Date, phase: MoonPhaseEvent?, astro: [AstroEvent]) -> some View {
         let isToday = esCal.isDateInToday(day)
         let isSelected = selectedMoonDay.map { esCal.isDate($0, inSameDayAs: day) } ?? false
@@ -293,8 +297,7 @@ struct CosmosView: View {
         let emoji = phase?.emoji ?? astro.first?.emoji ?? " "
         let tint: Color
         if let phase {
-            tint = phase.kind == .new ? Color(red: 0.93, green: 0.94, blue: 0.99)
-                                       : Color(red: 1.0, green: 0.98, blue: 0.88)
+            tint = phase.kind == .new ? AppTheme.rowLilac : AppTheme.rowWarm
         } else if !astro.isEmpty {
             tint = AppTheme.greenSoft
         } else {
@@ -310,7 +313,7 @@ struct CosmosView: View {
         .background(isSelected ? AppTheme.greenSoft : tint)
         .clipShape(RoundedRectangle(cornerRadius: 6))
         // Already-elapsed days of the month stay visible but greyed.
-        .opacity(isPast && !isSelected ? 0.4 : 1)
+        .opacity(isPast && !isSelected ? pastOpacity : 1)
         // Dot hint when an astro event is hidden behind a moon emoji.
         .overlay(alignment: .topTrailing) {
             if phase != nil && !astro.isEmpty {
@@ -420,8 +423,7 @@ struct CosmosView: View {
             Text(String(format: "%.2f m", tide.height)).font(.subheadline).fontWeight(.bold)
         }
         .padding(.horizontal, 14).padding(.vertical, 7)
-        .background(tide.type == "pleamar" ? Color(red: 0.94, green: 0.97, blue: 1.0)
-                                           : Color(red: 1.0, green: 0.98, blue: 0.88))
+        .background(tide.type == "pleamar" ? AppTheme.rowCool : AppTheme.rowWarm)
         .padding(.horizontal, 12)
         .clipShape(RoundedRectangle(cornerRadius: 8))
         .accessibilityElement(children: .ignore)
@@ -450,13 +452,13 @@ struct CosmosView: View {
             }
         }
         .padding(.horizontal, 12).padding(.vertical, 8)
-        .background(isToday ? Color(red: 1.0, green: 0.95, blue: 0.75)
+        .background(isToday ? AppTheme.rowToday
                              : isSoon ? AppTheme.greenSoft
-                             : Color(.systemGray6))
+                             : AppTheme.rowNeutral)
         .clipShape(RoundedRectangle(cornerRadius: 10))
         .overlay(RoundedRectangle(cornerRadius: 10)
             .stroke(isToday ? Color.yellow : isSoon ? AppTheme.green.opacity(0.35) : Color.clear))
-        .opacity(isPast ? 0.6 : 1)
+        .opacity(isPast ? pastRowOpacity : 1)
     }
 
     // MARK: - Helpers
@@ -505,14 +507,34 @@ struct CosmosView: View {
         sunMoon = SunMoonService.shared.calculate(location: store.selected.sunMoon, date: activeDay)
     }
 
+    // MARK: Astronomy memo cache
+    // Phases and events are pure functions of (month, place): the same month recomputes
+    // identically every time the tab is opened or a day is tapped. Memoize them so
+    // switching tabs or picking a day is instant instead of re-running Meeus each time.
+
+    private struct AstroKey: Hashable {
+        let month: Date
+        let lat: Double
+        let lon: Double
+    }
+    private static var phasesCache: [Date: [MoonPhaseEvent]] = [:]
+    private static var eventsCache: [AstroKey: [AstroEvent]] = [:]
+
     private func loadMoonPhases() {
         // Start at the first of the selected month (not `selectedDate`) so the earlier,
         // already-elapsed days of the current month still show their phase — greyed in
         // the calendar — instead of appearing blank. One year ahead for the rest.
         let horizon = Calendar.current.date(byAdding: .year, value: 1, to: selectedDate) ?? selectedDate
-        moonPhases = MoonPhasesService.shared.nextPhases(from: startOfMonth(selectedDate), count: 44)
-            .filter { $0.datetime <= horizon }
-        moonCalMonth = startOfMonth(selectedDate)
+        let monthStart = startOfMonth(selectedDate)
+        if let cached = Self.phasesCache[monthStart] {
+            moonPhases = cached
+        } else {
+            let phases = MoonPhasesService.shared.nextPhases(from: monthStart, count: 44)
+                .filter { $0.datetime <= horizon }
+            Self.phasesCache[monthStart] = phases
+            moonPhases = phases
+        }
+        moonCalMonth = monthStart
         selectedMoonDay = nil
     }
 
@@ -525,17 +547,25 @@ struct CosmosView: View {
         // Start at the first of the selected month so past events of the current month
         // stay visible (greyed) rather than vanishing. One year ahead for the rest.
         let monthStart = startOfMonth(selectedDate)
+        let loc = store.selected.sunMoon
+        let key = AstroKey(month: monthStart, lat: loc.lat, lon: loc.lon)
+        if let cached = Self.eventsCache[key] {
+            astroEvents = cached
+            return
+        }
         let horizon = Calendar.current.date(byAdding: .year, value: 1, to: selectedDate) ?? selectedDate
         var events = AstroEventsService.shared.nextEvents(from: monthStart, count: 66)
         // Solar turning points (earliest/latest sunrise & sunset) for the selected place.
         events += SunMoonService.shared
-            .solarTurningPoints(location: store.selected.sunMoon, from: monthStart, years: 1)
+            .solarTurningPoints(location: loc, from: monthStart, years: 1)
             .map { tp in
                 AstroEvent(label: tp.kind.label, emoji: tp.kind.emoji,
                            details: "\(tp.kind.note) · \(hhmmLocal(tp.time))",
                            datetime: tp.time, date: isoDay(tp.day), timeLocal: hhmmLocal(tp.time))
             }
-        astroEvents = events.filter { $0.datetime <= horizon }.sorted { $0.datetime < $1.datetime }
+        let result = events.filter { $0.datetime <= horizon }.sorted { $0.datetime < $1.datetime }
+        Self.eventsCache[key] = result
+        astroEvents = result
     }
 
     private func hhmmLocal(_ date: Date) -> String { Self.hhmmFmt.string(from: date) }

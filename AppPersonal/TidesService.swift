@@ -11,7 +11,7 @@ struct TideStation: Identifiable {
 
 // MARK: - Tide (used by TidesService, CosmosView and the tides widget)
 
-struct Tide: Identifiable {
+struct Tide: Identifiable, Codable {
     var id: String { time + type }
     let time: String
     let height: Double
@@ -117,6 +117,12 @@ struct TidesService {
             let isoDate = ISO8601DateFormatter()
             isoDate.formatOptions = [.withFullDate]
             isoDate.timeZone = TimeZone(identifier: "Europe/Madrid")
+            // A published day's tide table never changes, so a cache hit is final:
+            // no network call, and the card paints on the first frame.
+            if let cached = TidesDiskCache.load(station: stationId, day: dateStr) {
+                days.append(TideDayResult(date: isoDate.string(from: d), tides: cached))
+                continue
+            }
             do {
                 let (data, _) = try await URLSession.shared.data(from: comps.url!)
                 let resp = try JSONDecoder().decode(IHMResponse.self, from: data)
@@ -124,15 +130,71 @@ struct TidesService {
                 if tideList.isEmpty, let single = resp.mareas?.datos?.mareaOne {
                     tideList = [single]
                 }
-                days.append(TideDayResult(
-                    date: isoDate.string(from: d),
-                    tides: tideList.map { Tide(time: $0.hora ?? "—", height: Double($0.altura ?? "0") ?? 0, type: $0.tipo ?? "") }
-                ))
+                let tides = tideList.map {
+                    Tide(time: $0.hora ?? "—", height: Double($0.altura ?? "0") ?? 0, type: $0.tipo ?? "")
+                }
+                // Only cache a real answer — an empty day may just be IHM having a bad moment.
+                if !tides.isEmpty { TidesDiskCache.save(tides, station: stationId, day: dateStr) }
+                days.append(TideDayResult(date: isoDate.string(from: d), tides: tides))
             } catch {
                 days.append(TideDayResult(date: isoDate.string(from: d), tides: []))
             }
         }
         return TidesDayPair(station: stationName, days: days)
+    }
+}
+
+// MARK: - Disk cache
+
+/// Per (station, day) tide tables, kept in the App Group container so the app and the
+/// widget share one copy. Entries are immutable, so they are only ever pruned by age.
+enum TidesDiskCache {
+    private static let folder = "TidesCache"
+    /// Days kept around; anything older is no longer reachable from the UI.
+    private static let maxAgeDays = 30
+
+    private static func directory() -> URL? {
+        let fm = FileManager.default
+        let base = fm.containerURL(forSecurityApplicationGroupIdentifier: appGroupID)
+            ?? fm.urls(for: .cachesDirectory, in: .userDomainMask).first
+        guard let base else { return nil }
+        let url = base.appendingPathComponent(folder, isDirectory: true)
+        if !fm.fileExists(atPath: url.path) {
+            try? fm.createDirectory(at: url, withIntermediateDirectories: true)
+        }
+        return url
+    }
+
+    private static func fileURL(station: String, day: String) -> URL? {
+        directory()?.appendingPathComponent("\(station)_\(day).json")
+    }
+
+    static func load(station: String, day: String) -> [Tide]? {
+        guard let url = fileURL(station: station, day: day),
+              let data = try? Data(contentsOf: url),
+              let tides = try? JSONDecoder().decode([Tide].self, from: data),
+              !tides.isEmpty else { return nil }
+        return tides
+    }
+
+    static func save(_ tides: [Tide], station: String, day: String) {
+        guard let url = fileURL(station: station, day: day),
+              let data = try? JSONEncoder().encode(tides) else { return }
+        try? data.write(to: url, options: .atomic)
+        prune()
+    }
+
+    /// Drop files last written more than `maxAgeDays` ago.
+    private static func prune() {
+        guard let dir = directory() else { return }
+        let fm = FileManager.default
+        let cutoff = Date().addingTimeInterval(-Double(maxAgeDays) * 86400)
+        let files = (try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
+        for file in files {
+            guard let modified = try? file.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate,
+                  modified < cutoff else { continue }
+            try? fm.removeItem(at: file)
+        }
     }
 }
 
