@@ -3,6 +3,7 @@
 App de iOS personal que reúne en un solo lugar la predicción y los avisos de **AEMET**, los datos de tu **estación Netatmo**, información de **sol y luna**, **mareas**, **eventos astronómicos**, gráficas históricas y una familia de **widgets** para la pantalla de inicio.
 
 > Repositorio: `github.com/baltamir1978/AEMET-Netatmo-ios`
+> En la pantalla de inicio aparece como **Tiempo ES** (13 caracteres se truncan en una línea).
 
 ## Características
 
