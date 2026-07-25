@@ -283,7 +283,7 @@ struct WeatherWidgetView: View {
                 if !hours.isEmpty {
                     HStack(spacing: 0) {
                         ForEach(Array(hours.prefix(5).enumerated()), id: \.offset) { _, h in
-                            hourColumn(h).frame(maxWidth: .infinity)
+                            hourColumn(h, probLift: 3).frame(maxWidth: .infinity)
                         }
                     }
                 }
@@ -419,7 +419,10 @@ struct WeatherWidgetView: View {
         return f.string(from: date)
     }
 
-    private func hourColumn(_ h: AemetHourPoint) -> some View {
+    /// `probLift` sube la probabilidad de lluvia sin cambiar la altura de la columna: en el
+    /// mediano la tira horaria va pegada al borde inferior (arriba no hay holgura que ceder),
+    /// así que el % rozaba el canto teniendo hueco de sobra hasta la temperatura de la hora.
+    private func hourColumn(_ h: AemetHourPoint, probLift: CGFloat = 0) -> some View {
         VStack(spacing: 4) {
             Text(h.isToday ? String(format: "%02d", h.hour) : weekday(forHour: h))
                 .font(.caption2).foregroundStyle(.white.opacity(0.8))
@@ -433,6 +436,7 @@ struct WeatherWidgetView: View {
                     // Draw at natural width so "100%" (one digit wider) never gets an ellipsis;
                     // it's tiny next to the column width, so it can't overlap neighbours.
                     .lineLimit(1).fixedSize()
+                    .offset(y: -probLift)
             } else {
                 Text(" ").font(.system(size: 9))
             }
