@@ -73,7 +73,9 @@ actor NetatmoService {
         return try decode(StationsDataResponse.self, from: data)
     }
 
-    func getMeasure(deviceId: String, moduleId: String, scale: String, types: [String], dateBegin: Int) async throws -> GetMeasureResponse {
+    /// `realTime`: with it off Netatmo only returns closed intervals, so rain that fell
+    /// inside the current 3-hour slot is missing from the chart until the slot ends.
+    func getMeasure(deviceId: String, moduleId: String, scale: String, types: [String], dateBegin: Int, realTime: Bool = false) async throws -> GetMeasureResponse {
         let token = try await validAccessToken()
         var comps = URLComponents(string: "\(baseAPI)/getmeasure")!
         comps.queryItems = [
@@ -84,7 +86,7 @@ actor NetatmoService {
             URLQueryItem(name: "type",         value: types.joined(separator: ",")),
             URLQueryItem(name: "date_begin",   value: "\(dateBegin)"),
             URLQueryItem(name: "optimize",     value: "false"),
-            URLQueryItem(name: "real_time",    value: "false"),
+            URLQueryItem(name: "real_time",    value: realTime ? "true" : "false"),
         ]
         let (data, _) = try await URLSession.shared.data(from: comps.url!)
         return try decode(GetMeasureResponse.self, from: data)

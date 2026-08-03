@@ -86,12 +86,15 @@ nonisolated struct NetatmoModule: Decodable {
     let type: String?
     let dashboardData: [String: AnyCodable]?
     let reachable: Bool?
+    /// Only the wireless modules report it; the base station runs on mains power.
+    let batteryPercent: Int?
 
     enum CodingKeys: String, CodingKey {
         case id = "_id"
         case type
         case dashboardData = "dashboard_data"
         case reachable
+        case batteryPercent = "battery_percent"
     }
 }
 

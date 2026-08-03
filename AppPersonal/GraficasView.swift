@@ -25,6 +25,8 @@ struct GraficasView: View {
     @State private var interiorChart: ChartData?
     @State private var loadingExt = false
     @State private var loadingInt = false
+    @State private var exteriorError: String?
+    @State private var interiorError: String?
     @State private var configError = false
     @Environment(\.verticalSizeClass) private var vSize
 
@@ -85,6 +87,7 @@ struct GraficasView: View {
             selectedType: $exteriorType,
             chartData: exteriorChart,
             isLoading: loadingExt,
+            errorText: exteriorError,
             chartHeight: chartHeight,
             onTypeChange: { loadExterior() }
         )
@@ -97,6 +100,7 @@ struct GraficasView: View {
             selectedType: $interiorType,
             chartData: interiorChart,
             isLoading: loadingInt,
+            errorText: interiorError,
             chartHeight: chartHeight,
             onTypeChange: { loadInterior() }
         )
@@ -154,6 +158,13 @@ struct GraficasView: View {
 
         let isRain = exteriorType == "Rain"
         let moduleId = isRain ? cfg.moduleRain : cfg.moduleExterior
+        // Asking the base station for `sum_rain` returns an empty body forever, which used
+        // to look exactly like "no ha llovido". Say what is actually wrong instead.
+        if isRain && moduleId.isEmpty {
+            exteriorChart = nil
+            exteriorError = String(localized: "No hay pluviómetro configurado.")
+            return
+        }
         let (scale, days) = scaleAndDays(period)
         // `getmeasure` only accepts `sum_rain` for the rain gauge; `Sum_rain_1/24`
         // are dashboard_data fields and return an empty body here.
@@ -161,19 +172,77 @@ struct GraficasView: View {
         let dateBegin = dateBeginUnix(days: days)
 
         loadingExt = true
+        exteriorError = nil
         Task {
             do {
-                let resp = try await NetatmoService.shared.getMeasure(
-                    deviceId: deviceId,
-                    moduleId: moduleId.isEmpty ? deviceId : moduleId,
-                    scale: scale,
-                    types: [measureType],
-                    dateBegin: dateBegin
-                )
-                exteriorChart = buildChartData(from: resp, scale: scale, isRain: isRain)
-            } catch {}
+                let resp = isRain
+                    ? try await rainMeasure(deviceId: deviceId, moduleId: moduleId,
+                                            scale: scale, dateBegin: dateBegin)
+                    : try await NetatmoService.shared.getMeasure(
+                        deviceId: deviceId,
+                        moduleId: moduleId.isEmpty ? deviceId : moduleId,
+                        scale: scale,
+                        types: [measureType],
+                        dateBegin: dateBegin)
+                if let apiError = resp.error {
+                    exteriorChart = nil
+                    exteriorError = describe(apiError)
+                } else {
+                    exteriorChart = buildChartData(from: resp, scale: scale, isRain: isRain)
+                    // An empty body is not "no rain": dry intervals still come back as zeros.
+                    if exteriorChart == nil { exteriorError = String(localized: "El módulo no devolvió medidas.") }
+                }
+            } catch {
+                exteriorChart = nil
+                exteriorError = error.localizedDescription
+            }
             loadingExt = false
         }
+    }
+
+    /// Netatmo answers "Service temporarily unavailable" to anything it can't serve, which
+    /// includes a `module_id` that no longer belongs to the station — indistinguishable from
+    /// a real outage. So: ask in real time first (the only way to see the slot in progress),
+    /// then plainly, then with the gauge re-detected from the station itself.
+    private func rainMeasure(deviceId: String, moduleId: String,
+                             scale: String, dateBegin: Int) async throws -> GetMeasureResponse {
+        func ask(_ module: String, realTime: Bool) async throws -> GetMeasureResponse {
+            try await NetatmoService.shared.getMeasure(
+                deviceId: deviceId, moduleId: module, scale: scale,
+                types: ["sum_rain"], dateBegin: dateBegin, realTime: realTime)
+        }
+        func usable(_ r: GetMeasureResponse) -> Bool { r.error == nil && !(r.body?.isEmpty ?? true) }
+
+        let realTimeTry = try await ask(moduleId, realTime: true)
+        if usable(realTimeTry) { return realTimeTry }
+
+        let plainTry = try await ask(moduleId, realTime: false)
+        if usable(plainTry) { return plainTry }
+
+        // Last resort: the stored id may be stale (a replaced gauge keeps its own id).
+        if let detected = await detectRainModule(deviceId: deviceId), detected != moduleId {
+            let detectedTry = try await ask(detected, realTime: true)
+            if usable(detectedTry) {
+                AppConfiguration.shared.moduleRain = detected
+                return detectedTry
+            }
+        }
+        return realTimeTry
+    }
+
+    /// The `NAModule3` currently attached to the station, straight from `getstationsdata`.
+    private func detectRainModule(deviceId: String) async -> String? {
+        guard let resp = try? await NetatmoService.shared.getStationsData() else { return nil }
+        let devices = resp.body?.devices ?? []
+        let main = devices.first { $0.id == deviceId } ?? devices.first
+        return main?.modules?.first { $0.type == "NAModule3" }?.id
+    }
+
+    /// Netatmo's own wording plus its code — "Maximum usage reached" (rate limit) and a
+    /// dead module both arrive as generic-sounding text otherwise.
+    private func describe(_ error: NetatmoAPIError) -> String {
+        let message = error.message ?? String(localized: "Error de Netatmo")
+        return error.code.map { "\(message) (\($0))" } ?? message
     }
 
     private func loadInterior() {
@@ -185,6 +254,7 @@ struct GraficasView: View {
         let dateBegin = dateBeginUnix(days: days)
 
         loadingInt = true
+        interiorError = nil
         Task {
             do {
                 let resp = try await NetatmoService.shared.getMeasure(
@@ -194,8 +264,17 @@ struct GraficasView: View {
                     types: [interiorType],
                     dateBegin: dateBegin
                 )
-                interiorChart = buildChartData(from: resp, scale: scale, isRain: false)
-            } catch {}
+                if let apiError = resp.error {
+                    interiorChart = nil
+                    interiorError = describe(apiError)
+                } else {
+                    interiorChart = buildChartData(from: resp, scale: scale, isRain: false)
+                    if interiorChart == nil { interiorError = String(localized: "El módulo no devolvió medidas.") }
+                }
+            } catch {
+                interiorChart = nil
+                interiorError = error.localizedDescription
+            }
             loadingInt = false
         }
     }
@@ -269,6 +348,7 @@ struct ChartCard: View {
     @Binding var selectedType: String
     let chartData: ChartData?
     let isLoading: Bool
+    var errorText: String? = nil
     var chartHeight: CGFloat = 200
     let onTypeChange: () -> Void
 
@@ -326,7 +406,16 @@ struct ChartCard: View {
                 Divider()
                 statsRow(data: data)
             } else {
-                Text("Sin datos").foregroundStyle(.secondary).frame(height: chartHeight)
+                VStack(spacing: 6) {
+                    Text("Sin datos").foregroundStyle(.secondary)
+                    if let errorText {
+                        Text(errorText)
+                            .font(.caption2).foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 16)
+                    }
+                }
+                .frame(height: chartHeight)
             }
         }
         .background(.background)

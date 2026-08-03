@@ -26,6 +26,15 @@ enum BackgroundRefresher {
         }
     }
 
+    /// Foreground twin of `refreshAll`, throttled: the widgets used to depend on the
+    /// `BGAppRefreshTask` (which iOS defers for hours) or on the user happening to open the
+    /// Actual tab, so opening the app and leaving left them showing the previous reading.
+    /// Now every launch/foreground tops everything up, at most once every `minInterval`.
+    static func refreshIfStale(minInterval: TimeInterval = 600) async {
+        if let last = WidgetStore.lastRefresh(), Date().timeIntervalSince(last) < minInterval { return }
+        await refreshAll()
+    }
+
     /// Refresh everything the widgets show and write it to the App Group.
     @discardableResult
     static func refreshAll() async -> Bool {
@@ -42,6 +51,7 @@ enum BackgroundRefresher {
 
         await refreshNetatmo()
 
+        WidgetStore.markRefreshed()
         WidgetCenter.shared.reloadAllTimelines()
         return changed
     }

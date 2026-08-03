@@ -202,6 +202,7 @@ enum WidgetStore {
     private static let intervalKey  = "widget.refresh.intervalHours"
     private static let aemetApiKeyKey = "widget.aemet.apiKey"
     private static let stationOverridesKey = "widget.stations.overrides"
+    private static let lastRefreshKey = "widget.refresh.lastRun"
 
     // Refresh cadence ----------------------------------------------------------
 
@@ -331,6 +332,18 @@ enum WidgetStore {
             return loadResolvedCurrent() ?? list.first ?? SavedLocation.defaults[0]
         }
         return list.first { $0.code == code } ?? list.first ?? SavedLocation.defaults[0]
+    }
+
+    // Refresh bookkeeping -------------------------------------------------------
+
+    /// When the app (or its background task) last pulled everything the widgets show.
+    static func lastRefresh() -> Date? {
+        let t = defaults?.double(forKey: lastRefreshKey) ?? 0
+        return t > 0 ? Date(timeIntervalSince1970: t) : nil
+    }
+
+    static func markRefreshed() {
+        defaults?.set(Date().timeIntervalSince1970, forKey: lastRefreshKey)
     }
 
     // --------------------------------------------------------------------------

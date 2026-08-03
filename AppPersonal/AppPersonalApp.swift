@@ -14,6 +14,9 @@ struct AppPersonalApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                // Cold launch: `scenePhase` never *changes* into `.active` here, so the
+                // top-up has to be kicked off explicitly.
+                .task { await BackgroundRefresher.refreshIfStale() }
         }
         // Background data refresh: SwiftUI registers the handler; we reschedule
         // it (at the cadence chosen in Ajustes) whenever the app goes to the
@@ -24,7 +27,18 @@ struct AppPersonalApp: App {
             await BackgroundRefresher.schedule()
         }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .background { BackgroundRefresher.schedule() }
+            switch phase {
+            case .background:
+                BackgroundRefresher.schedule()
+                // Push whatever the app just saw onto the widgets. Without this, data the
+                // app refreshed while you were using it only reached them on the widget's
+                // own schedule — you'd close the app and still read the old temperature.
+                WidgetStore.reload()
+            case .active:
+                Task { await BackgroundRefresher.refreshIfStale() }
+            default:
+                break
+            }
         }
     }
 }

@@ -996,6 +996,92 @@
         }
       }
     },
+    "El módulo no devolvió medidas.": {
+      "localizations": {
+        "ca": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El mòdul no ha retornat mesures."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The module returned no measurements."
+          }
+        },
+        "eu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Moduluak ez du neurketarik itzuli."
+          }
+        },
+        "gl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O módulo non devolveu medicións."
+          }
+        }
+      }
+    },
+    "El pluviómetro configurado ya no está en la estación.": {
+      "extractionState": "stale",
+      "localizations": {
+        "ca": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El pluviòmetre configurat ja no és a l'estació."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The configured rain gauge is no longer part of the station."
+          }
+        },
+        "eu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Konfiguratutako euri-neurgailua ez dago jada estazioan."
+          }
+        },
+        "gl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O pluviómetro configurado xa non está na estación."
+          }
+        }
+      }
+    },
+    "El pluviómetro no envía datos (sin cobertura o sin pilas).": {
+      "extractionState": "stale",
+      "localizations": {
+        "ca": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El pluviòmetre no envia dades (sense cobertura o sense piles)."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The rain gauge is not sending data (out of range or out of battery)."
+          }
+        },
+        "eu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Euri-neurgailuak ez du daturik bidaltzen (estaldurarik gabe edo pilarik gabe)."
+          }
+        },
+        "gl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O pluviómetro non envía datos (sen cobertura ou sen pilas)."
+          }
+        }
+      }
+    },
     "Elegir la estación de observación": {
       "localizations": {
         "ca": {
@@ -1048,6 +1134,34 @@
           "stringUnit": {
             "state": "translated",
             "value": "En %lld días"
+          }
+        }
+      }
+    },
+    "Error de Netatmo": {
+      "localizations": {
+        "ca": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Error de Netatmo"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Netatmo error"
+          }
+        },
+        "eu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Netatmo errorea"
+          }
+        },
+        "gl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erro de Netatmo"
           }
         }
       }
@@ -2609,6 +2723,63 @@
       }
     },
     "Netatmo · Credenciales OAuth": {},
+    "No hay pluviómetro configurado.": {
+      "localizations": {
+        "ca": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No hi ha cap pluviòmetre configurat."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No rain gauge configured."
+          }
+        },
+        "eu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ez dago euri-neurgailurik konfiguratuta."
+          }
+        },
+        "gl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Non hai ningún pluviómetro configurado."
+          }
+        }
+      }
+    },
+    "No hay pluviómetro detectado. Pulsa «Detectar de nuevo» en Ajustes.": {
+      "extractionState": "stale",
+      "localizations": {
+        "ca": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No s'ha detectat cap pluviòmetre. Prem «Detectar de nou» a Configuració."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No rain gauge detected. Tap “Detect again” in Settings."
+          }
+        },
+        "eu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ez da euri-neurgailurik hauteman. Sakatu «Detektatu berriro» Ezarpenetan."
+          }
+        },
+        "gl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Non se detectou ningún pluviómetro. Preme «Detectar de novo» en Axustes."
+          }
+        }
+      }
+    },
     "No se pudo cargar la previsión (Open-Meteo).": {
       "extractionState": "stale",
       "localizations": {
@@ -3677,6 +3848,34 @@
       }
     },
     "base": {},
+    "batería %lld %%": {
+      "localizations": {
+        "ca": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bateria %lld %%"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "battery %lld %%"
+          }
+        },
+        "eu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bateria %lld %%"
+          }
+        },
+        "gl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "batería %lld %%"
+          }
+        }
+      }
+    },
     "detectado": {
       "localizations": {
         "ca": {
@@ -3706,6 +3905,34 @@
       }
     },
     "h": {},
+    "hoy %@": {
+      "localizations": {
+        "ca": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "avui %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "today %@"
+          }
+        },
+        "eu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "gaur %@"
+          }
+        },
+        "gl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hoxe %@"
+          }
+        }
+      }
+    },
     "lluvia": {},
     "mm": {},
     "naranja": {
