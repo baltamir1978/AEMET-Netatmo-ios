@@ -42,7 +42,7 @@ struct SunMoonProvider: AppIntentTimelineProvider {
 
     private func entry(for date: Date, location: SavedLocation) -> SunMoonEntry {
         let r = SunMoonService.shared.calculate(location: location.sunMoon, date: date)
-        let next = MoonPhasesService.shared.nextPhases(from: date, count: 1).first
+        let next = MoonPhasesService.forZone(location.tz).nextPhases(from: date, count: 1).first
         return SunMoonEntry(
             date: date,
             locationName: r.location.name,
@@ -55,14 +55,16 @@ struct SunMoonProvider: AppIntentTimelineProvider {
             illumination: r.moon.illumination,
             nextMoonLabel: next?.label,
             nextMoonEmoji: next?.emoji,
-            nextMoonWhen: next.map { Self.format($0.datetime) }
+            nextMoonWhen: next.map { Self.format($0.datetime, tz: location.tz) }
         )
     }
 
-    private static func format(_ date: Date) -> String {
+    /// The next phase's clock time, in the location's own zone — a Portuguese city runs
+    /// an hour behind, and everything else on the widget already reads local.
+    private static func format(_ date: Date, tz: String) -> String {
         let f = DateFormatter()
         f.locale = Locale(identifier: "es_ES")
-        f.timeZone = TimeZone(identifier: "Europe/Madrid")
+        f.timeZone = TimeZone(identifier: tz) ?? TimeZone(identifier: "Europe/Madrid")
         f.dateFormat = "d MMM · HH:mm"
         return f.string(from: date)
     }

@@ -36,11 +36,34 @@ final class LocationStore: ObservableObject {
     }
 
     private init() {
-        let list = WidgetStore.loadLocations()
+        let list = WidgetStore.loadLocations().map(Self.migrate)
         locations = list
         selectedCode = WidgetStore.loadSelectedCode() ?? list.first?.code ?? ""
-        resolvedCurrent = WidgetStore.loadResolvedCurrent()
+        resolvedCurrent = WidgetStore.loadResolvedCurrent().map(Self.migrate)
+        if let cur = resolvedCurrent { WidgetStore.saveResolvedCurrent(cur) }
         persist()
+    }
+
+    /// Bring a stored location up to date with the current rules — its timezone and its
+    /// station/source label. Both are fields an older build wrote once and never revisits:
+    /// a followed city with an `idema` already set never re-resolves its station, so
+    /// without this an "Evc_Niembru-Llanes" (or a Canary location on peninsular time)
+    /// would stay wrong forever. `shortStationName` is idempotent on its own output.
+    private static func migrate(_ loc: SavedLocation) -> SavedLocation {
+        var out = loc
+        // Locations saved before the zone was resolved per territory all carry
+        // "Europe/Madrid" — an hour off in the Canaries and in the Azores.
+        out.tz = timeZone(for: loc)
+        // Portuguese entries hold a *source* label there ("IPMA · Porto"), not a station
+        // name. Recompute it rather than tidy it: the AEMET title-casing turned the
+        // acronym into "Ipma", and it has to track the source the user picked anyway.
+        if IPMA.isPortuguese(code: loc.code) {
+            out.stationName = sourceLabel(for: loc)
+            return out
+        }
+        guard let name = loc.stationName else { return loc }
+        out.stationName = shortStationName(name)
+        return out
     }
 
     func select(_ code: String) {
@@ -72,6 +95,10 @@ final class LocationStore: ObservableObject {
     @discardableResult
     func resolveCurrent() async -> Bool {
         guard let coord = try? await CurrentLocationService.shared.currentCoordinate() else { return false }
+        // In Portugal there is no AEMET municipio to land on: resolving there used to snap
+        // to the nearest *Spanish* town, so the tab quietly showed Badajoz's forecast while
+        // you stood in Elvas. Hand the fix to IPMA instead.
+        if let place = await resolvePortugueseCurrent(coord) { return place }
         if maestro.isEmpty {
             maestro = (try? await AEMETService.shared.allMunicipios()) ?? []
         }
@@ -100,6 +127,8 @@ final class LocationStore: ObservableObject {
         let loc = SavedLocation(code: n.codMunicipio, name: realPlace, province: nil,
                                 lat: coord.latitude, lon: coord.longitude,
                                 idema: station?.0.indicativo,
+                                tz: SavedLocation.timeZoneIdentifier(code: n.codMunicipio,
+                                                                     lat: coord.latitude, lon: coord.longitude),
                                 stationName: stationName, stationDistanceKm: stationDist)
         resolvedCurrent = loc
         WidgetStore.saveResolvedCurrent(loc)
@@ -121,9 +150,13 @@ final class LocationStore: ObservableObject {
     @discardableResult
     func resolveCurrentBasic() async -> Bool {
         guard let coord = try? await CurrentLocationService.shared.currentCoordinate() else { return false }
+        // IPMA needs no key either, so Portugal keeps its national service even here.
+        if let place = await resolvePortugueseCurrent(coord) { return place }
         let city = await reverseGeocodeCity(coord)
         let loc = SavedLocation(code: SavedLocation.currentCode, name: city ?? "Ubicación actual",
-                                province: nil, lat: coord.latitude, lon: coord.longitude, idema: nil)
+                                province: nil, lat: coord.latitude, lon: coord.longitude, idema: nil,
+                                tz: SavedLocation.timeZoneIdentifier(code: SavedLocation.currentCode,
+                                                                     lat: coord.latitude, lon: coord.longitude))
         resolvedCurrent = loc
         WidgetStore.saveResolvedCurrent(loc)
         WidgetCenter.shared.reloadAllTimelines()
@@ -133,11 +166,72 @@ final class LocationStore: ObservableObject {
     /// Reverse-geocode a coordinate to its city/town name (e.g. "Madrid"), Spanish locale.
     /// Uses MapKit's MKReverseGeocodingRequest (CLGeocoder is deprecated since iOS 26).
     private func reverseGeocodeCity(_ coord: CLLocationCoordinate2D) async -> String? {
+        await reverseGeocode(coord).city
+    }
+
+    /// Town name plus ISO country code, so a fix can be routed to the right national
+    /// service. Both come from one geocoding round-trip.
+    private func reverseGeocode(_ coord: CLLocationCoordinate2D) async -> (city: String?, country: String?) {
         let loc = CLLocation(latitude: coord.latitude, longitude: coord.longitude)
-        guard let request = MKReverseGeocodingRequest(location: loc) else { return nil }
+        guard let request = MKReverseGeocodingRequest(location: loc) else { return (nil, nil) }
         request.preferredLocale = Locale(identifier: "es_ES")
         let items = try? await request.mapItems
-        return items?.first?.addressRepresentations?.cityName
+        guard let item = items?.first else { return (nil, nil) }
+        // `placemark` is deprecated in iOS 26, but its replacement publishes no country:
+        // `MKAddressRepresentations` offers `regionCode` (the region *within* a country)
+        // and a localized `fullAddress` string. Routing a fix to the right national
+        // service deserves a stable ISO code, not a substring match on a translated
+        // address, so we keep the deprecated accessor until Apple exposes the country.
+        return (item.addressRepresentations?.cityName, item.placemark.isoCountryCode)
+    }
+
+    /// Resolve a GPS fix that landed in Portugal onto an IPMA-served location, and store
+    /// it as the "Ubicación actual" entry. Returns nil when the fix isn't in Portugal, so
+    /// the caller carries on with the AEMET path.
+    ///
+    /// The entry keeps the real town as its name and the IPMA `pt-` code of the forecast
+    /// point it reads, which is what routes every later fetch to IPMA (or, further from a
+    /// district capital, to Open-Meteo — the user's pick in the source sheet).
+    private func resolvePortugueseCurrent(_ coord: CLLocationCoordinate2D) async -> Bool? {
+        let (city, country) = await reverseGeocode(coord)
+        guard country == "PT" else { return nil }
+        guard let near = IPMA.nearest(to: coord.latitude, coord.longitude) else { return nil }
+        var loc = SavedLocation(code: near.location.code, name: city ?? near.location.name,
+                                province: nil, lat: coord.latitude, lon: coord.longitude,
+                                idema: nil, tz: near.location.timeZone)
+        loc.stationName = Self.sourceLabel(for: loc)
+        loc.stationDistanceKm = IPMA.source(for: loc) == .ipma ? near.km : nil
+        resolvedCurrent = loc
+        WidgetStore.saveResolvedCurrent(loc)
+        WidgetCenter.shared.reloadAllTimelines()
+        return true
+    }
+
+    /// What the location card credits for a Portuguese location — the twin of the label
+    /// the source sheet ticks.
+    static func sourceLabel(for loc: SavedLocation) -> String? {
+        guard IPMA.isPortuguese(code: loc.code) else { return nil }
+        switch IPMA.source(for: loc) {
+        case .ipma:      return IPMA.forecastPoint(for: loc).map { "IPMA · \($0.location.name)" }
+        case .openMeteo: return "Open-Meteo"
+        }
+    }
+
+    /// Refresh the stored source label/distance for a Portuguese location after the user
+    /// switches service, so the card and the sheet agree straight away.
+    func refreshPortugueseSource(forCode code: String) {
+        func updated(_ loc: SavedLocation) -> SavedLocation {
+            var out = loc
+            out.stationName = Self.sourceLabel(for: loc)
+            out.stationDistanceKm = IPMA.source(for: loc) == .ipma ? IPMA.forecastPoint(for: loc)?.km : nil
+            return out
+        }
+        if let i = locations.firstIndex(where: { $0.code == code }) { locations[i] = updated(locations[i]) }
+        if let cur = resolvedCurrent, cur.code == code {
+            resolvedCurrent = updated(cur)
+            WidgetStore.saveResolvedCurrent(resolvedCurrent!)
+        }
+        persist()
     }
 
     /// The AEMET municipio whose centroid is closest to `coord` (fallback resolution).
@@ -268,9 +362,47 @@ final class LocationStore: ObservableObject {
 
     /// "MADRID, EL GOLOSO" → "El Goloso"; "MADRID/RETIRO" → "Retiro". Drops the leading
     /// province/town qualifier and title-cases the friendly remainder.
+    ///
+    /// AEMET's `ubi` field is raw operator data, and three of its habits leak into the UI:
+    /// stations of the pollution-watch network carry an `EVC_` prefix ("EVC_NIEMBRU-LLANES",
+    /// "EVC_DOÑANA"); municipio and site are often separated by a *double space* rather than
+    /// a comma ("GIJÓN  MUSEL"); and a bare `.capitalized` shouts the linking words
+    /// ("Cuevas De Felechosa"). The double space is normalised rather than split on, because
+    /// AEMET also uses it inside plain place names ("SANTA EULALIA  DEL CAMPO") where
+    /// splitting would leave "Del Campo".
     static func shortStationName(_ raw: String) -> String {
-        let tail = raw.split(whereSeparator: { $0 == "," || $0 == "/" }).last.map(String.init) ?? raw
-        return tail.trimmingCharacters(in: .whitespaces).capitalized
+        var name = raw.trimmingCharacters(in: .whitespaces)
+        if name.uppercased().hasPrefix("EVC_") { name = String(name.dropFirst(4)) }
+        name = name.split(separator: " ", omittingEmptySubsequences: true).joined(separator: " ")
+        let parts = name.components(separatedBy: CharacterSet(charactersIn: ",/"))
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        guard let tail = parts.last else { return titleCased(name) }
+        // A generic tail ("ALMERÍA/AEROPUERTO") says nothing on its own — keep the town.
+        guard parts.count > 1, isGenericSite(tail) else { return titleCased(tail) }
+        return titleCased(parts[0]) + ", " + titleCased(tail)
+    }
+
+    /// First words that describe a *kind* of place instead of naming one, so the qualifier
+    /// before them has to stay ("Aeropuerto" alone could be any of AEMET's 20 of them).
+    private static let genericSiteHeads: Set<String> = [
+        "aeropuerto", "aerodromo", "base", "deposito", "depuradora", "embalse", "presa",
+        "faro", "puerto", "parque", "instituto", "universidad", "facultad", "fac.",
+        "jardin", "observatorio", "famet", "centro", "ciudad",
+    ]
+
+    private static func isGenericSite(_ tail: String) -> Bool {
+        let head = tail.split(separator: " ").first.map(String.init) ?? tail
+        return genericSiteHeads.contains(normalize(head))
+    }
+
+    /// Spanish title case: `.capitalized` first (it handles parentheses and initials like
+    /// "S.E.A." correctly), then the linking words back down — except a leading one.
+    private static func titleCased(_ s: String) -> String {
+        let linking: Set<String> = ["de", "del", "la", "las", "los", "el", "y", "e", "en", "al", "a", "da", "do", "dels"]
+        return s.capitalized.split(separator: " ").enumerated().map { i, word in
+            i > 0 && linking.contains(normalize(String(word))) ? String(word).lowercased() : String(word)
+        }.joined(separator: " ")
     }
 
     /// Lowercased, accent-stripped form for tolerant name matching.
@@ -309,6 +441,7 @@ final class LocationStore: ObservableObject {
     /// `idema` (nil if none could be found).
     @discardableResult
     func attachNearestStation(toCode code: String) async -> String? {
+        guard !IPMA.isPortuguese(code: code) else { return nil }   // no AEMET network there
         guard let idx = locations.firstIndex(where: { $0.code == code }) else { return nil }
         if let existing = locations[idx].idema { return existing }   // already resolved
         let loc = locations[idx]
@@ -318,6 +451,25 @@ final class LocationStore: ObservableObject {
         guard locations.contains(where: { $0.code == code }) else { return nil }
         apply(station: station, km: distanceKm(coord, stationCoord), toCode: code)
         return station.indicativo
+    }
+
+    /// Build the followed location for a search result. A Portuguese entry (`pt-` code)
+    /// gets Lisbon time and its source label up front; a Spanish one resolves its
+    /// observation station later, on the first load.
+    func makeLocation(from m: AemetMunicipio) -> SavedLocation {
+        var loc = SavedLocation(code: m.codMunicipio, name: m.nombre, province: nil,
+                                lat: m.lat ?? selected.lat, lon: m.lon ?? selected.lon,
+                                idema: nil)
+        loc.tz = Self.timeZone(for: loc)
+        if IPMA.isPortuguese(code: m.codMunicipio) { loc.stationName = Self.sourceLabel(for: loc) }
+        return loc
+    }
+
+    /// Zone for a location, whichever country serves it: the IPMA catalogue knows its own
+    /// (the Azores are an hour behind Lisboa), Spain resolves province-then-coordinate.
+    static func timeZone(for loc: SavedLocation) -> String {
+        if let pt = IPMA.location(forCode: loc.code) { return pt.timeZone }
+        return SavedLocation.timeZoneIdentifier(code: loc.code, lat: loc.lat, lon: loc.lon)
     }
 
     /// Add (or update) a location and select it.

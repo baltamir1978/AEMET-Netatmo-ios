@@ -485,6 +485,15 @@ struct AemetMunicipio: Decodable, Identifiable {
         lat = (try? c.decode(String.self, forKey: .latitudDec)).flatMap(Double.init)
         lon = (try? c.decode(String.self, forKey: .longitudDec)).flatMap(Double.init)
     }
+
+    /// Direct constructor, so IPMA's Portuguese locations can share the search box and the
+    /// "add a place" path with AEMET's municipios (their code carries a `pt-` prefix).
+    init(codMunicipio: String, nombre: String, lat: Double?, lon: Double?) {
+        self.codMunicipio = codMunicipio
+        self.nombre = nombre
+        self.lat = lat
+        self.lon = lon
+    }
 }
 
 struct AemetStation: Decodable, Identifiable {

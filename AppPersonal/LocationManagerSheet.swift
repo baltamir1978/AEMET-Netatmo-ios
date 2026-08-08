@@ -82,15 +82,7 @@ struct LocationManagerSheet: View {
     }
 
     private func add(_ m: AemetMunicipio) {
-        let loc = SavedLocation(
-            code: m.codMunicipio,
-            name: m.nombre,
-            province: nil,
-            lat: m.lat ?? store.selected.lat,
-            lon: m.lon ?? store.selected.lon,
-            idema: nil
-        )
-        store.add(loc)
+        store.add(store.makeLocation(from: m))
         onChange()
         searchText = ""
         results = []
@@ -102,8 +94,9 @@ struct LocationManagerSheet: View {
         }
         let q = query.lowercased().folding(options: .diacriticInsensitive, locale: .current)
         results = Array(
-            cached
+            (cached
                 .filter { $0.nombre.lowercased().folding(options: .diacriticInsensitive, locale: .current).contains(q) }
+             + IPMA.searchAsMunicipios(query))
                 .prefix(15)
         )
     }

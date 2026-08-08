@@ -44,28 +44,20 @@ struct StationPickerSheet: View {
     @State private var isLoading = true
     @State private var pinned: String?
 
+    /// Portugal has no station network to choose from — the same sheet picks the service
+    /// instead (see `portugueseSourceList`).
+    private var isPortugal: Bool { IPMA.isPortuguese(code: code) }
+
     var body: some View {
         NavigationStack {
-            List {
-                if isLoading {
-                    HStack { Spacer(); ProgressView(); Spacer() }
-                } else if nearby.isEmpty {
-                    Text("No se pudo cargar la red de estaciones de AEMET.")
-                        .foregroundStyle(.secondary)
+            Group {
+                if isPortugal {
+                    portugueseSourceList
                 } else {
-                    Section {
-                        automaticRow
-                    } footer: {
-                        Text("Automática usa la estación más cercana. Si está al otro lado de la montaña, elige a mano la que comparta tu valle o tu altitud.")
-                    }
-                    Section("Estaciones cercanas") {
-                        ForEach(nearby, id: \.station.indicativo) { item in
-                            stationRow(item.station, km: item.km)
-                        }
-                    }
+                    spanishStationList
                 }
             }
-            .navigationTitle("Estación")
+            .navigationTitle(isPortugal ? Text("Fuente") : Text("Estación"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
@@ -74,10 +66,87 @@ struct StationPickerSheet: View {
             }
         }
         .task {
+            guard !isPortugal else { isLoading = false; return }
             pinned = store.pinnedStation(forCode: code)
             nearby = await store.nearbyStations(to: coord)
             isLoading = false
         }
+    }
+
+    private var spanishStationList: some View {
+        List {
+            if isLoading {
+                HStack { Spacer(); ProgressView(); Spacer() }
+            } else if nearby.isEmpty {
+                Text("No se pudo cargar la red de estaciones de AEMET.")
+                    .foregroundStyle(.secondary)
+            } else {
+                Section {
+                    automaticRow
+                } footer: {
+                    Text("Automática usa la estación más cercana. Si está al otro lado de la montaña, elige a mano la que comparta tu valle o tu altitud.")
+                }
+                Section("Estaciones cercanas") {
+                    ForEach(nearby, id: \.station.indicativo) { item in
+                        stationRow(item.station, km: item.km)
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Portugal: pick the service instead of the station
+
+    /// In Portugal the choice isn't which station to read but which service: IPMA is the
+    /// national one but only forecasts 35 points, so away from a district capital
+    /// Open-Meteo's own coordinate is the closer answer. Both rows carry the number that
+    /// decides it — how far the capital actually is.
+    @ViewBuilder private var portugueseSourceList: some View {
+        let loc = store.locations.first { $0.code == code } ?? store.selected
+        let point = IPMA.forecastPoint(for: loc)
+        let active = IPMA.source(for: loc)
+        List {
+            Section {
+                if let point {
+                    sourceRow(.ipma,
+                              title: Text("IPMA · \(point.location.name)"),
+                              detail: point.km < 1
+                                ? String(localized: "Servicio meteorológico nacional")
+                                : String(localized: "Servicio nacional · a \(StationFormat.km(point.km)) km"),
+                              active: active)
+                }
+                sourceRow(.openMeteo,
+                          title: Text("Open-Meteo"),
+                          detail: String(localized: "Modelo global, en tu coordenada exacta"),
+                          active: active)
+            } footer: {
+                if let point, point.km >= 1 {
+                    Text("El IPMA solo publica previsión para 35 localidades. Es la fuente oficial, pero desde \(StationFormat.km(point.km)) km su previsión ya describe otro sitio: Open-Meteo modela tu punto exacto. Los avisos son siempre del IPMA.")
+                } else {
+                    Text("Los avisos meteorológicos son siempre del IPMA.")
+                }
+            }
+        }
+    }
+
+    private func sourceRow(_ source: PortugalSource, title: Text, detail: String,
+                           active: PortugalSource) -> some View {
+        Button {
+            IPMA.savePinnedSource(source, forCode: code)
+            onSelect()
+            dismiss()
+        } label: {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    title.foregroundStyle(.primary)
+                    Text(detail).font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer()
+                if active == source { checkmark }
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(active == source ? [.isButton, .isSelected] : .isButton)
     }
 
     private var automaticRow: some View {

@@ -58,6 +58,28 @@ struct SavedLocation: Codable, Identifiable, Equatable {
         SavedLocation(code: "28079", name: "Madrid",            province: "Madrid",   lat: 40.4168, lon: -3.7038, idema: "3126Y"),
         SavedLocation(code: "33036", name: "Posada de Llanes",  province: "Asturias", lat: 43.4214, lon: -4.7546, idema: "1183X"),
     ]
+
+    /// The zone a location's clock times belong to.
+    ///
+    /// `tz` used to default to `Europe/Madrid` for everything, which is wrong for the two
+    /// bits of Spain that don't run on peninsular time: the Canaries are an hour behind,
+    /// so every sunrise, moonrise and lunar phase there was printed an hour late.
+    ///
+    /// Province first (an AEMET code is an INE code, and 35/38 *are* the Canaries — no
+    /// guessing), coordinate only as the fallback for entries that carry no municipio,
+    /// like a GPS fix resolved without an AEMET key.
+    static func timeZoneIdentifier(code: String, lat: Double, lon: Double) -> String {
+        if code.hasPrefix("35") || code.hasPrefix("38") { return "Atlantic/Canary" }
+        if isCanaries(lat: lat, lon: lon) { return "Atlantic/Canary" }
+        return "Europe/Madrid"
+    }
+
+    /// Bounding box of the archipelago, from El Hierro to Lanzarote, with a small margin.
+    /// Madeira (32.6°N) and the Azores (west of 25°W) fall outside it on purpose — those
+    /// are IPMA's and get their zone from the catalogue.
+    private static func isCanaries(lat: Double, lon: Double) -> Bool {
+        (27.3...29.6).contains(lat) && (-18.4 ... -13.2).contains(lon)
+    }
 }
 
 // MARK: - Refresh cadence

@@ -59,6 +59,8 @@ enum BackgroundRefresher {
     /// Fetch a single municipio's forecast + warning and persist its snapshot.
     @discardableResult
     private static func refreshCity(_ loc: SavedLocation) async -> Bool {
+        // Portugal is IPMA's (or Open-Meteo's, per the location's source pick).
+        if IPMA.isPortuguese(code: loc.code) { return await refreshCityPortugal(loc) }
         // No AEMET key → the app serves the whole forecast from Open-Meteo, so refresh
         // from there too. Otherwise a key-less install would never update its widgets in
         // the background (every AEMET call throws `notConfigured`).
@@ -85,6 +87,17 @@ enum BackgroundRefresher {
 
         let snap = AemetSnapshotBuilder.makeAemetSnapshot(
             municipio: loc.name, daily: daily, hourly: hourly, observation: obs, alert: alert)
+        store(snap, for: loc)
+        return true
+    }
+
+    /// IPMA twin of `refreshCity`. Unlike Open-Meteo, IPMA does publish warnings, so the
+    /// badge is refreshed here rather than carried over.
+    private static func refreshCityPortugal(_ loc: SavedLocation) async -> Bool {
+        guard let b = await IPMAService.load(for: loc, maxAge: nil) else { return false }
+        let snap = AemetSnapshotBuilder.makeAemetSnapshot(
+            municipio: loc.name, daily: b.daily, hourly: b.hourly, observation: b.obs,
+            alert: b.alerts.first?.badge)
         store(snap, for: loc)
         return true
     }

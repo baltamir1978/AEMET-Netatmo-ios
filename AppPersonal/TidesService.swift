@@ -98,9 +98,15 @@ struct TidesService {
     private let base = "https://ideihm.covam.es/api-ihm/getmarea"
 
     func tides(for date: Date, stationId: String = "4", stationName: String = "Llanes") async throws -> TidesDayPair {
+        // Which calendar day to ask for is the port's own, not the peninsula's: on a
+        // Canary port between 23:00 and midnight local it is already tomorrow in Madrid,
+        // and we'd fetch the wrong day's table.
+        let port = ihmStations.first { $0.id == stationId }
+        let zone = port.map { SavedLocation.timeZoneIdentifier(code: "", lat: $0.lat, lon: $0.lon) }
+            ?? "Europe/Madrid"
         let fmt = DateFormatter()
         fmt.dateFormat = "yyyyMMdd"
-        fmt.timeZone = TimeZone(identifier: "Europe/Madrid")
+        fmt.timeZone = TimeZone(identifier: zone)
 
         let cal = Calendar.current
         var days: [TideDayResult] = []
@@ -116,7 +122,7 @@ struct TidesService {
             ]
             let isoDate = ISO8601DateFormatter()
             isoDate.formatOptions = [.withFullDate]
-            isoDate.timeZone = TimeZone(identifier: "Europe/Madrid")
+            isoDate.timeZone = TimeZone(identifier: zone)   // label the day in port time too
             // A published day's tide table never changes, so a cache hit is final:
             // no network call, and the card paints on the first frame.
             if let cached = TidesDiskCache.load(station: stationId, day: dateStr) {

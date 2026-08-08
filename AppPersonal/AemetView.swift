@@ -43,6 +43,11 @@ struct AemetView: View {
     private var hasData: Bool { daily != nil || hourly != nil || obs != nil }
     /// False when running on the keyless Open-Meteo fallback (no AEMET station data).
     private var aemetConfigured: Bool { AppConfiguration.shared.isAemetConfigured }
+    /// The selected location is served by IPMA / Open-Meteo rather than AEMET.
+    private var isPortugal: Bool { IPMA.isPortuguese(code: store.selected.code) }
+    /// Whether the location card leads anywhere: an AEMET station list, or Portugal's
+    /// source picker.
+    private var canPickSource: Bool { isPortugal || aemetConfigured }
 
     /// Coordinates of the selected location (used for Open-Meteo air/pollen/UV).
     private var coords: (lat: Double, lon: Double)? {
@@ -124,7 +129,8 @@ struct AemetView: View {
                     // readings so the hero falls back to the forecast rather than showing
                     // the previous station's temperature while the new one loads.
                     obs = nil
-                    Task { await loadForecast() }
+                    if IPMA.isPortuguese(code: loc.code) { store.refreshPortugueseSource(forCode: loc.code) }
+                    Task { await loadForecast(force: true) }
                 }
             }
         }
@@ -187,14 +193,17 @@ struct AemetView: View {
         } else {
             nowCard()
             // Station cards need a real AEMET observation station; the Open-Meteo fallback
-            // has none (its readings are modelled, not from a physical station).
-            if aemetConfigured { currentLocationCard() }
+            // has none (its readings are modelled, not from a physical station). Portugal
+            // shows the card too — there it names the *service* and opens the source picker.
+            if canPickSource { currentLocationCard() }
             hourlyCard()
             tempChartCard()
             airPollenUVCard()
             dailyCard()
             todayDetailsCard()
-            if aemetConfigured { observationCard() }
+            // The station detail card is AEMET-shaped (idema, sensor breakdown); IPMA's
+            // readings feed the hero card but have no such station sheet behind them.
+            if aemetConfigured && !isPortugal { observationCard() }
             sourceCard()
             updatedFooter()
         }
@@ -300,7 +309,8 @@ struct AemetView: View {
                             .foregroundStyle(.primary)
                         HStack(spacing: 4) {
                             Image(systemName: "cloud.sun.fill").font(.caption2)
-                            Text(stationCaption(station, km: km))
+                            Text(isPortugal ? sourceCaption(station, km: km)
+                                            : stationCaption(station, km: km))
                                 .font(.caption)
                         }
                         .foregroundStyle(.secondary)
@@ -308,7 +318,8 @@ struct AemetView: View {
                     Spacer()
                     // Only AEMET has an observation network to choose from; the Open-Meteo
                     // fallback reads "current conditions" straight from the coordinate.
-                    if aemetConfigured {
+                    // In Portugal the chevron leads to the IPMA / Open-Meteo choice.
+                    if canPickSource {
                         Image(systemName: "chevron.right").font(.caption2).foregroundStyle(.tertiary)
                     }
                 }
@@ -319,12 +330,11 @@ struct AemetView: View {
                 .shadow(color: .black.opacity(0.05), radius: 4, y: 2)
             }
             .buttonStyle(.plain)
-            .disabled(!aemetConfigured)
+            .disabled(!canPickSource)
             // A ternary of String literals would be a runtime String — verbatim, never
             // localized. The `Text` overload keeps the literal in the catalog.
             .accessibilityElement(children: .combine)
-            .accessibilityHint(aemetConfigured ? Text("Elegir la estación de observación")
-                                               : Text(verbatim: ""))
+            .accessibilityHint(pickerHint)
         }
     }
 
@@ -346,6 +356,18 @@ struct AemetView: View {
     private func stationCaption(_ station: String, km: Double?) -> String {
         guard let km else { return String(localized: "Estación \(station)") }
         return String(localized: "Estación \(station) · a \(StationFormat.km(km)) km")
+    }
+
+    /// "Fuente IPMA · Porto · a 12 km" — Portugal's twin of `stationCaption`. There is no
+    /// observation station to name there, so the card credits the service instead.
+    private func sourceCaption(_ source: String, km: Double?) -> String {
+        guard let km, km >= 1 else { return String(localized: "Fuente \(source)") }
+        return String(localized: "Fuente \(source) · a \(StationFormat.km(km)) km")
+    }
+
+    private var pickerHint: Text {
+        if isPortugal { return Text("Elegir la fuente de datos") }
+        return aemetConfigured ? Text("Elegir la estación de observación") : Text(verbatim: "")
     }
 
     /// Station temperature only when the reading is recent enough to trust as "now".
@@ -986,15 +1008,7 @@ struct AemetView: View {
 
     /// Add a searched municipio to the followed list and select it.
     private func addLocation(_ m: AemetMunicipio) {
-        let loc = SavedLocation(
-            code: m.codMunicipio,
-            name: m.nombre,
-            province: nil,
-            lat: m.lat ?? store.selected.lat,
-            lon: m.lon ?? store.selected.lon,
-            idema: nil
-        )
-        store.add(loc)
+        store.add(store.makeLocation(from: m))
         searchText = ""
         searchResults = []
         showSearch = false
@@ -1007,8 +1021,9 @@ struct AemetView: View {
         }
         let q = query.lowercased().folding(options: .diacriticInsensitive, locale: .current)
         searchResults = Array(
-            cachedMunicipios
+            (cachedMunicipios
                 .filter { $0.nombre.lowercased().folding(options: .diacriticInsensitive, locale: .current).contains(q) }
+             + IPMA.searchAsMunicipios(query))
                 .prefix(10)
         )
         showSearch = !searchResults.isEmpty
@@ -1017,6 +1032,13 @@ struct AemetView: View {
     // MARK: - Networking
 
     private func loadForecast(force: Bool = false) async {
+        // Portugal is IPMA's (or Open-Meteo's, per the source sheet), key or no key.
+        if IPMA.isPortuguese(code: store.selectedCode)
+            || (store.selectedCode == SavedLocation.currentCode
+                && IPMA.isPortuguese(code: store.resolvedCurrent?.code ?? "")) {
+            await loadPortugueseForecast(force: force)
+            return
+        }
         // No AEMET key → serve the whole forecast from the open Open-Meteo API instead.
         guard AppConfiguration.shared.isAemetConfigured else {
             await loadOpenMeteoForecast()
@@ -1130,6 +1152,40 @@ struct AemetView: View {
         isLoading = false
     }
 
+    /// Portugal. Feeds the same `daily`/`hourly`/`obs`/`alerts` from IPMA — or from
+    /// Open-Meteo when the location sits far from a district capital and the source sheet
+    /// says so. Warnings are IPMA's either way.
+    private func loadPortugueseForecast(force: Bool) async {
+        isLoading = true
+        loadError = nil
+        if store.selectedCode == SavedLocation.currentCode {
+            _ = await store.resolveCurrent()
+            if store.resolvedCurrent == nil {
+                loadError = "No se pudo obtener tu ubicación. Revisa los permisos de localización."
+                isLoading = false
+                return
+            }
+        }
+        let loc = store.selected
+        let maxAge: TimeInterval? = force ? nil : aemetTTL
+        async let bundleTask = IPMAService.load(for: loc, maxAge: maxAge)
+        // Air quality / pollen / UV are Open-Meteo's everywhere, Portugal included.
+        async let omTask = OpenMeteoService.shared.fetch(lat: loc.lat, lon: loc.lon)
+        let bundle = await bundleTask
+        openMeteo = await omTask ?? openMeteo
+        if let bundle {
+            daily = bundle.daily
+            hourly = bundle.hourly
+            obs = bundle.obs
+            alerts = bundle.alerts
+            lastLoadedAt = Date()
+            saveAemetSnapshot()
+        } else if daily == nil && hourly == nil {
+            loadError = "No se pudo cargar la previsión (IPMA)."
+        }
+        isLoading = false
+    }
+
     /// Fill `daily`/`hourly`/`obs` from the on-disk cache without touching the network,
     /// so a relaunch shows the previous forecast immediately while the live fetch runs.
     private func primeFromCache() {
@@ -1185,6 +1241,14 @@ struct AemetView: View {
         ud.set(Date(), forKey: key)
 
         for loc in store.locations where loc.code != currentMunicipio {
+            if IPMA.isPortuguese(code: loc.code) {
+                if let b = await IPMAService.load(for: loc, maxAge: aemetTTL) {
+                    WidgetStore.save(aemet: AemetSnapshotBuilder.makeAemetSnapshot(
+                        municipio: loc.name, daily: b.daily, hourly: b.hourly,
+                        observation: b.obs, alert: b.alerts.first?.badge), forCode: loc.code)
+                }
+                continue
+            }
             async let d = try? await AEMETService.shared.forecastDaily(municipio: loc.code, maxAge: aemetTTL)
             async let h = try? await AEMETService.shared.forecastHourly(municipio: loc.code, maxAge: aemetTTL)
             let (dr, hr) = await (d, h)

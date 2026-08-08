@@ -15,7 +15,15 @@ struct AstroEvent: Identifiable {
 
 struct AstroEventsService {
     static let shared = AstroEventsService()
-    private let tz = TimeZone(identifier: "Europe/Madrid")!
+    /// Zone the event instants are printed in — see `MoonPhasesService.tz`.
+    let tz: TimeZone
+
+    init(tz: TimeZone = TimeZone(identifier: "Europe/Madrid")!) { self.tz = tz }
+
+    /// Instance that prints in a location's own timezone (`SavedLocation.tz`).
+    static func forZone(_ identifier: String) -> AstroEventsService {
+        AstroEventsService(tz: TimeZone(identifier: identifier) ?? .current)
+    }
 
     func nextEvents(from startDate: Date, count: Int = 10) -> [AstroEvent] {
         let equinoxes = equinoxesAndSolstices(nearDate: startDate, count: count + 10)
@@ -169,7 +177,7 @@ struct AstroEventsService {
     // MARK: - Supermoons / micromoons (full moon near perigee / apogee)
 
     private func supermoons(from startDate: Date) -> [AstroEvent] {
-        let fulls = MoonPhasesService.shared.nextPhases(from: startDate, count: 30)
+        let fulls = MoonPhasesService(tz: tz).nextPhases(from: startDate, count: 30)
             .filter { $0.kind == .full }
         var events: [AstroEvent] = []
         for f in fulls {

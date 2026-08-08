@@ -12,6 +12,34 @@
         }
       }
     },
+    "%@ · %@ km": {
+      "localizations": {
+        "ca": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ · %2$@ km"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ · %2$@ km"
+          }
+        },
+        "eu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ · %2$@ km"
+          }
+        },
+        "gl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ · %2$@ km"
+          }
+        }
+      }
+    },
     "%@ · nivel %@": {
       "localizations": {
         "ca": {
@@ -595,6 +623,34 @@
         }
       }
     },
+    "Aviso": {
+      "localizations": {
+        "ca": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Avís"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Warning"
+          }
+        },
+        "eu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abisua"
+          }
+        },
+        "gl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aviso"
+          }
+        }
+      }
+    },
     "Ayer": {
       "localizations": {
         "ca": {
@@ -795,6 +851,118 @@
         }
       }
     },
+    "Cerca de %@": {
+      "localizations": {
+        "ca": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A prop de %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Near %@"
+          }
+        },
+        "eu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ inguruan"
+          }
+        },
+        "gl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preto de %@"
+          }
+        }
+      }
+    },
+    "Chubascos": {
+      "localizations": {
+        "ca": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ruixats"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Showers"
+          }
+        },
+        "eu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zaparradak"
+          }
+        },
+        "gl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chuvascos"
+          }
+        }
+      }
+    },
+    "Chubascos con tormenta": {
+      "localizations": {
+        "ca": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ruixats amb tempesta"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Showers and thunderstorms"
+          }
+        },
+        "eu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zaparradak eta ekaitza"
+          }
+        },
+        "gl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chuvascos con treboada"
+          }
+        }
+      }
+    },
+    "Chubascos de nieve": {
+      "localizations": {
+        "ca": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ruixats de neu"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Snow showers"
+          }
+        },
+        "eu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Elur-zaparradak"
+          }
+        },
+        "gl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chuvascos de neve"
+          }
+        }
+      }
+    },
     "Client ID": {},
     "Client Secret": {},
     "Configura Netatmo en Ajustes": {
@@ -850,6 +1018,62 @@
           "stringUnit": {
             "state": "translated",
             "value": "Cota de neve"
+          }
+        }
+      }
+    },
+    "Cubierto": {
+      "localizations": {
+        "ca": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cobert"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Overcast"
+          }
+        },
+        "eu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Estalia"
+          }
+        },
+        "gl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cuberto"
+          }
+        }
+      }
+    },
+    "Despejado": {
+      "localizations": {
+        "ca": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Serè"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear"
+          }
+        },
+        "eu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Oskarbi"
+          }
+        },
+        "gl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Despexado"
           }
         }
       }
@@ -996,6 +1220,34 @@
         }
       }
     },
+    "El IPMA solo publica previsión para 35 localidades. Es la fuente oficial, pero desde %@ km su previsión ya describe otro sitio: Open-Meteo modela tu punto exacto. Los avisos son siempre del IPMA.": {
+      "localizations": {
+        "ca": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "L'IPMA només publica previsió per a 35 localitats. És la font oficial, però des de %@ km la seva previsió ja descriu un altre lloc: Open-Meteo modela el teu punt exacte. Els avisos sempre són de l'IPMA."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "IPMA only publishes forecasts for 35 locations. It is the official source, but from %@ km away its forecast already describes somewhere else: Open-Meteo models your exact point. Warnings always come from IPMA."
+          }
+        },
+        "eu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "IPMAk 35 herritarako baino ez du iragarpenik argitaratzen. Iturri ofiziala da, baina %@ km-tik aurrera bere iragarpenak beste leku bat deskribatzen du jada: Open-Meteok zure puntu zehatza modelatzen du. Abisuak beti IPMArenak dira."
+          }
+        },
+        "gl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O IPMA só publica predición para 35 localidades. É a fonte oficial, pero desde %@ km a súa predición xa describe outro sitio: Open-Meteo modela o teu punto exacto. Os avisos son sempre do IPMA."
+          }
+        }
+      }
+    },
     "El módulo no devolvió medidas.": {
       "localizations": {
         "ca": {
@@ -1106,6 +1358,34 @@
           "stringUnit": {
             "state": "translated",
             "value": "Escoller a estación de observación"
+          }
+        }
+      }
+    },
+    "Elegir la fuente de datos": {
+      "localizations": {
+        "ca": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Triar la font de dades"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose the data source"
+          }
+        },
+        "eu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aukeratu datu-iturria"
+          }
+        },
+        "gl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Elixir a fonte de datos"
           }
         }
       }
@@ -1436,6 +1716,34 @@
         }
       }
     },
+    "Estado de la mar": {
+      "localizations": {
+        "ca": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Estat de la mar"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sea conditions"
+          }
+        },
+        "eu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Itsasoaren egoera"
+          }
+        },
+        "gl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Estado do mar"
+          }
+        }
+      }
+    },
     "Exterior": {
       "extractionState": "stale",
       "localizations": {
@@ -1551,6 +1859,90 @@
         }
       }
     },
+    "Fuente": {
+      "localizations": {
+        "ca": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Font"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Source"
+          }
+        },
+        "eu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Iturria"
+          }
+        },
+        "gl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fonte"
+          }
+        }
+      }
+    },
+    "Fuente %@": {
+      "localizations": {
+        "ca": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Font %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Source %@"
+          }
+        },
+        "eu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Iturria: %@"
+          }
+        },
+        "gl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fonte %@"
+          }
+        }
+      }
+    },
+    "Fuente %@ · a %@ km": {
+      "localizations": {
+        "ca": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Font %1$@ · a %2$@ km"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Source %1$@ · %2$@ km away"
+          }
+        },
+        "eu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Iturria: %1$@ · %2$@ km-ra"
+          }
+        },
+        "gl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fonte %1$@ · a %2$@ km"
+          }
+        }
+      }
+    },
     "Fuente: %@": {
       "localizations": {
         "ca": {
@@ -1607,6 +1999,34 @@
         }
       }
     },
+    "Granizo": {
+      "localizations": {
+        "ca": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Calamarsa"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hail"
+          }
+        },
+        "eu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Txingorra"
+          }
+        },
+        "gl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sarabia"
+          }
+        }
+      }
+    },
     "Gráficas": {
       "localizations": {
         "ca": {
@@ -1659,6 +2079,34 @@
           "stringUnit": {
             "state": "translated",
             "value": "Hai %lld días"
+          }
+        }
+      }
+    },
+    "Helada": {
+      "localizations": {
+        "ca": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gelada"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Frost"
+          }
+        },
+        "eu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Izotza"
+          }
+        },
+        "gl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Xeada"
           }
         }
       }
@@ -1774,6 +2222,34 @@
           "stringUnit": {
             "state": "translated",
             "value": "Humidade relativa"
+          }
+        }
+      }
+    },
+    "IPMA · %@": {
+      "localizations": {
+        "ca": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "IPMA · %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "IPMA · %@"
+          }
+        },
+        "eu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "IPMA · %@"
+          }
+        },
+        "gl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "IPMA · %@"
           }
         }
       }
@@ -1948,6 +2424,34 @@
         }
       }
     },
+    "Llovizna": {
+      "localizations": {
+        "ca": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Plugim"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Drizzle"
+          }
+        },
+        "eu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zirimiria"
+          }
+        },
+        "gl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Orballo"
+          }
+        }
+      }
+    },
     "Lluvia": {
       "extractionState": "stale",
       "localizations": {
@@ -2002,6 +2506,146 @@
           "stringUnit": {
             "state": "translated",
             "value": "Choiva 1h"
+          }
+        }
+      }
+    },
+    "Lluvia débil": {
+      "localizations": {
+        "ca": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pluja feble"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Light rain"
+          }
+        },
+        "eu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Euri ahula"
+          }
+        },
+        "gl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choiva feble"
+          }
+        }
+      }
+    },
+    "Lluvia fuerte": {
+      "localizations": {
+        "ca": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pluja forta"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Heavy rain"
+          }
+        },
+        "eu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Euri handia"
+          }
+        },
+        "gl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choiva forte"
+          }
+        }
+      }
+    },
+    "Lluvia y nieve": {
+      "localizations": {
+        "ca": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pluja i neu"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rain and snow"
+          }
+        },
+        "eu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Euria eta elurra"
+          }
+        },
+        "gl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choiva e neve"
+          }
+        }
+      }
+    },
+    "Lluvias": {
+      "localizations": {
+        "ca": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pluges"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rain"
+          }
+        },
+        "eu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Euriak"
+          }
+        },
+        "gl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choivas"
+          }
+        }
+      }
+    },
+    "Los avisos meteorológicos son siempre del IPMA.": {
+      "localizations": {
+        "ca": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Els avisos meteorològics sempre són de l'IPMA."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Weather warnings always come from IPMA."
+          }
+        },
+        "eu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eguraldi-abisuak beti IPMArenak dira."
+          }
+        },
+        "gl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Os avisos meteorolóxicos son sempre do IPMA."
           }
         }
       }
@@ -2287,6 +2931,34 @@
           "stringUnit": {
             "state": "translated",
             "value": "As miñas localizacións"
+          }
+        }
+      }
+    },
+    "Modelo global, en tu coordenada exacta": {
+      "localizations": {
+        "ca": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Model global, a la teva coordenada exacta"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Global model, at your exact coordinate"
+          }
+        },
+        "eu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eredu globala, zure koordenatu zehatzean"
+          }
+        },
+        "gl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modelo global, na túa coordenada exacta"
           }
         }
       }
@@ -2694,6 +3366,34 @@
         }
       }
     },
+    "Neblina": {
+      "localizations": {
+        "ca": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Boirina"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mist"
+          }
+        },
+        "eu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lanbroa"
+          }
+        },
+        "gl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Néboa lixeira"
+          }
+        }
+      }
+    },
     "Netatmo configurado": {
       "localizations": {
         "ca": {
@@ -2723,6 +3423,118 @@
       }
     },
     "Netatmo · Credenciales OAuth": {},
+    "Nevadas": {
+      "localizations": {
+        "ca": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nevades"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Snowfall"
+          }
+        },
+        "eu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Elur-jasak"
+          }
+        },
+        "gl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nevaradas"
+          }
+        }
+      }
+    },
+    "Niebla": {
+      "localizations": {
+        "ca": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Boira"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fog"
+          }
+        },
+        "eu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Behelainoa"
+          }
+        },
+        "gl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Néboa"
+          }
+        }
+      }
+    },
+    "Nieblas": {
+      "localizations": {
+        "ca": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Boires"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fog"
+          }
+        },
+        "eu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Behelainoak"
+          }
+        },
+        "gl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Néboas"
+          }
+        }
+      }
+    },
+    "Nieve": {
+      "localizations": {
+        "ca": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neu"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Snow"
+          }
+        },
+        "eu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Elurra"
+          }
+        },
+        "gl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neve"
+          }
+        }
+      }
+    },
     "No hay pluviómetro configurado.": {
       "localizations": {
         "ca": {
@@ -2866,12 +3678,68 @@
         }
       }
     },
+    "Nubosidad de evolución": {
+      "localizations": {
+        "ca": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nuvolositat d'evolució"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Convective clouds"
+          }
+        },
+        "eu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bilakaerako hodeiak"
+          }
+        },
+        "gl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nubosidade de evolución"
+          }
+        }
+      }
+    },
     "Obtén tus credenciales en dev.netatmo.com. El refresh token lo genera auth.py la primera vez.": {},
     "Offline": {},
     "Online": {},
     "Open-Meteo": {},
     "PM10 %lld µg/m³": {},
     "PM2.5 %lld µg/m³": {},
+    "Parcialmente nuboso": {
+      "localizations": {
+        "ca": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Parcialment ennuvolat"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Partly cloudy"
+          }
+        },
+        "eu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Partzialki lainotua"
+          }
+        },
+        "gl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Parcialmente nubrado"
+          }
+        }
+      }
+    },
     "Pendiente": {
       "localizations": {
         "ca": {
@@ -2928,6 +3796,34 @@
         }
       }
     },
+    "Periodos de lluvia": {
+      "localizations": {
+        "ca": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Períodes de pluja"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Intermittent rain"
+          }
+        },
+        "eu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Euri-tarteak"
+          }
+        },
+        "gl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Períodos de choiva"
+          }
+        }
+      }
+    },
     "Pleamar": {
       "extractionState": "stale",
       "localizations": {
@@ -2953,6 +3849,34 @@
           "stringUnit": {
             "state": "translated",
             "value": "Preamar"
+          }
+        }
+      }
+    },
+    "Poco nuboso": {
+      "localizations": {
+        "ca": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Poc ennuvolat"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mostly clear"
+          }
+        },
+        "eu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hodei gutxi"
+          }
+        },
+        "gl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pouco nubrado"
           }
         }
       }
@@ -3330,6 +4254,62 @@
         }
       }
     },
+    "Servicio meteorológico nacional": {
+      "localizations": {
+        "ca": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Servei meteorològic nacional"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "National weather service"
+          }
+        },
+        "eu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meteorologia zerbitzu nazionala"
+          }
+        },
+        "gl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Servizo meteorolóxico nacional"
+          }
+        }
+      }
+    },
+    "Servicio nacional · a %@ km": {
+      "localizations": {
+        "ca": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Servei nacional · a %@ km"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "National service · %@ km away"
+          }
+        },
+        "eu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zerbitzu nazionala · %@ km-ra"
+          }
+        },
+        "gl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Servizo nacional · a %@ km"
+          }
+        }
+      }
+    },
     "Sin datos": {
       "localizations": {
         "ca": {
@@ -3558,6 +4538,62 @@
         }
       }
     },
+    "Temperaturas máximas": {
+      "localizations": {
+        "ca": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Temperatures màximes"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "High temperatures"
+          }
+        },
+        "eu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tenperatura maximoak"
+          }
+        },
+        "gl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Temperaturas máximas"
+          }
+        }
+      }
+    },
+    "Temperaturas mínimas": {
+      "localizations": {
+        "ca": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Temperatures mínimes"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Low temperatures"
+          }
+        },
+        "eu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tenperatura minimoak"
+          }
+        },
+        "gl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Temperaturas mínimas"
+          }
+        }
+      }
+    },
     "Tiempo": {
       "localizations": {
         "ca": {
@@ -3610,6 +4646,90 @@
           "stringUnit": {
             "state": "translated",
             "value": "Tempo non dispoñible"
+          }
+        }
+      }
+    },
+    "Todos los puertos": {
+      "localizations": {
+        "ca": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tots els ports"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All ports"
+          }
+        },
+        "eu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Portu guztiak"
+          }
+        },
+        "gl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Todos os portos"
+          }
+        }
+      }
+    },
+    "Tormenta": {
+      "localizations": {
+        "ca": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tempesta"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Thunderstorm"
+          }
+        },
+        "eu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ekaitza"
+          }
+        },
+        "gl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Treboada"
+          }
+        }
+      }
+    },
+    "Tormentas": {
+      "localizations": {
+        "ca": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tempestes"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Thunderstorms"
+          }
+        },
+        "eu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ekaitzak"
+          }
+        },
+        "gl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Treboadas"
           }
         }
       }
@@ -3752,6 +4872,34 @@
           "stringUnit": {
             "state": "translated",
             "value": "Vento"
+          }
+        }
+      }
+    },
+    "Vientos": {
+      "localizations": {
+        "ca": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vents"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wind"
+          }
+        },
+        "eu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Haizea"
+          }
+        },
+        "gl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ventos"
           }
         }
       }

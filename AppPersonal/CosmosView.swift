@@ -371,6 +371,24 @@ struct CosmosView: View {
         }
     }
 
+    /// The four IHM ports closest to the selected location. Tide times along the whole
+    /// Atlantic Iberian coast fall within about three quarters of an hour of each other,
+    /// so the nearest port is a fair stand-in — the heights are what drift, and those are
+    /// mostly an estuary effect (Lisboa sits up the Tagus and runs a good half-metre
+    /// higher than the open coast either side of it).
+    private var nearbyTideStations: [TideStation] {
+        let here = store.selected
+        return ihmStations
+            .sorted { haversineKm($0.lat, $0.lon, here.lat, here.lon)
+                    < haversineKm($1.lat, $1.lon, here.lat, here.lon) }
+            .prefix(4)
+            .map { $0 }
+    }
+
+    private func tideDistanceKm(_ st: TideStation) -> Double {
+        haversineKm(st.lat, st.lon, store.selected.lat, store.selected.lon)
+    }
+
     private func tidesCard(_ pair: TidesDayPair) -> some View {
         VStack(spacing: 0) {
             HStack {
@@ -379,8 +397,20 @@ struct CosmosView: View {
                     .foregroundStyle(.secondary).tracking(1)
                 Spacer()
                 Picker("", selection: $selectedTideStationId) {
-                    ForEach(ihmStations) { st in
-                        Text(st.name).tag(st.id)
+                    // Nearest first, with the distance: 70 alphabetical ports made you
+                    // hunt for yours, and the number is what tells you whether a port is
+                    // close enough to stand in for where you actually are — the way
+                    // A Guarda or Ayamonte do for the Portuguese coast, which the IHM
+                    // only covers at Lisboa.
+                    Section("Cerca de \(store.selected.name)") {
+                        ForEach(nearbyTideStations) { st in
+                            Text("\(st.name) · \(StationFormat.km(tideDistanceKm(st))) km").tag(st.id)
+                        }
+                    }
+                    Section("Todos los puertos") {
+                        ForEach(ihmStations) { st in
+                            Text(st.name).tag(st.id)
+                        }
                     }
                 }
                 .pickerStyle(.menu)
@@ -529,7 +559,7 @@ struct CosmosView: View {
         if let cached = Self.phasesCache[monthStart] {
             moonPhases = cached
         } else {
-            let phases = MoonPhasesService.shared.nextPhases(from: monthStart, count: 44)
+            let phases = MoonPhasesService.forZone(store.selected.tz).nextPhases(from: monthStart, count: 44)
                 .filter { $0.datetime <= horizon }
             Self.phasesCache[monthStart] = phases
             moonPhases = phases
@@ -554,7 +584,7 @@ struct CosmosView: View {
             return
         }
         let horizon = Calendar.current.date(byAdding: .year, value: 1, to: selectedDate) ?? selectedDate
-        var events = AstroEventsService.shared.nextEvents(from: monthStart, count: 66)
+        var events = AstroEventsService.forZone(store.selected.tz).nextEvents(from: monthStart, count: 66)
         // Solar turning points (earliest/latest sunrise & sunset) for the selected place.
         events += SunMoonService.shared
             .solarTurningPoints(location: loc, from: monthStart, years: 1)

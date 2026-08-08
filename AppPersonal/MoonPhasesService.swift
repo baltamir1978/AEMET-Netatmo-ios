@@ -16,7 +16,17 @@ struct MoonPhaseEvent: Identifiable {
 
 struct MoonPhasesService {
     static let shared = MoonPhasesService()
-    private let tz = TimeZone(identifier: "Europe/Madrid")!
+    /// Zone the phase instants are printed in. A new moon happens at one instant
+    /// worldwide, but the clock time you read it at is the location's — Lisboa is an hour
+    /// behind Madrid, so a Portuguese location has to build its own instance.
+    let tz: TimeZone
+
+    init(tz: TimeZone = TimeZone(identifier: "Europe/Madrid")!) { self.tz = tz }
+
+    /// Instance that prints in a location's own timezone (`SavedLocation.tz`).
+    static func forZone(_ identifier: String) -> MoonPhasesService {
+        MoonPhasesService(tz: TimeZone(identifier: identifier) ?? .current)
+    }
 
     /// Next `count` principal phases (new + full) at or after `startDate`, sorted by date.
     func nextPhases(from startDate: Date, count: Int = 8) -> [MoonPhaseEvent] {

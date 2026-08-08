@@ -14,12 +14,14 @@ App de iOS personal que reúne en un solo lugar la predicción y los avisos de *
 - 📍 **Ubicación actual o ciudades seguidas**: busca municipios y guarda los que uses a diario (`LocationStore`, `LocationManagerSheet`, `CurrentLocationService`).
 - 🗼 **Selector de estación**: AEMET asigna la más cercana, pero puedes fijar otra por municipio cuando la de al lado no es la de tu valle (`StationPickerSheet`).
 - 🌍 **Sin API key de AEMET también funciona**: la pestaña se sirve completa desde **Open-Meteo** (`OpenMeteoService`), sin cambiar la interfaz.
+- 🇵🇹 **Portugal, con el IPMA** (`IPMAService`): previsión horaria y diaria, observaciones de estación y avisos oficiales del Instituto Português do Mar e da Atmosfera, sin API key. Su catálogo abierto son 35 localidades, así que el selector de estación se convierte allí en un **selector de fuente**: IPMA (capital más próxima, con su distancia) u Open-Meteo en tu coordenada exacta. Fuera de esas 35, Open-Meteo es el valor por defecto a partir de 25 km.
 
 ### Sol·Luna
 
 - ☀️🌙 Orto y ocaso, crepúsculos, fase lunar y calendario mensual (`SunMoonService`, `MoonPhasesService`).
 - 🌌 Eventos astronómicos y solsticios/equinoccios con sus extremos de amanecer y atardecer (`AstroEventsService`, `CosmosView`).
-- 🌊 **Mareas** del IHM con caché en disco (`TidesService`).
+- 🕐 **Cada sitio en su hora**: la zona sale del territorio, no de un valor fijo peninsular — Canarias (`Atlantic/Canary`), Madeira y Azores (una hora por detrás de Lisboa). Afecta a orto y ocaso, salida y puesta de luna, fases y eventos, en la app y en el widget. Un ocaso en Tenerife que se anunciaba a las 21:50 son en realidad las 20:50.
+- 🌊 **Mareas** del IHM con caché en disco (`TidesService`), con los puertos ordenados por cercanía a la ubicación. El IPMA no publica tablas de marea (son del Instituto Hidrográfico portugués, sin API abierta): de la costa portuguesa el IHM solo sirve Lisboa, y como toda la costa atlántica ibérica rompe con menos de tres cuartos de hora de diferencia, el puerto más próximo — A Guarda al norte, Ayamonte al sur — es mejor referencia que Lisboa, que va estuario arriba y da medio metro de más.
 
 ### Netatmo (opcional)
 
@@ -95,6 +97,7 @@ AppPersonal/
 │   ├── LocationManagerSheet.swift  # Ciudades seguidas
 │   ├── StationPickerSheet.swift    # Selector de estación AEMET
 │   ├── AEMETService.swift / AEMETAlertsService.swift
+│   ├── IPMAService.swift           # Portugal: previsión, observación y avisos del IPMA
 │   ├── OpenMeteoService.swift / OpenMeteoForecast.swift
 │   ├── NetatmoService.swift / NetatmoModels.swift / NetatmoSnapshotBuilder.swift
 │   ├── SunMoonService.swift / MoonPhasesService.swift
@@ -132,4 +135,4 @@ AppPersonal/
 
 ## Licencia
 
-Proyecto personal de Bruno Altamirano. Datos meteorológicos cortesía de **AEMET**, **Open-Meteo**, **Netatmo** e **Instituto Hidrográfico de la Marina** (sujetos a sus respectivos términos de uso).
+Proyecto personal de Bruno Altamirano. Datos meteorológicos cortesía de **AEMET**, **IPMA**, **Open-Meteo**, **Netatmo** e **Instituto Hidrográfico de la Marina** (sujetos a sus respectivos términos de uso).

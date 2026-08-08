@@ -60,6 +60,15 @@ struct WeatherProvider: AppIntentTimelineProvider {
     /// the Open-Meteo branch a key-less install left the widget frozen on whatever the app
     /// last wrote, since nothing else refreshes it in the background. Nil when the fetch fails.
     private func freshSnapshot(for loc: SavedLocation, alert: AemetAlertBadge?) async -> AemetSnapshot? {
+        // Portugal: IPMA (or Open-Meteo, per the location's source pick), warnings included
+        // — unlike AEMET's CAP bundle, IPMA's warning feed is a plain JSON the widget can
+        // fetch itself, so the badge here is live rather than carried over from the app.
+        if IPMA.isPortuguese(code: loc.code) {
+            guard let b = await IPMAService.load(for: loc, maxAge: 30 * 60) else { return nil }
+            return AemetSnapshotBuilder.makeAemetSnapshot(
+                municipio: loc.name, daily: b.daily, hourly: b.hourly, observation: b.obs,
+                alert: b.alerts.first?.badge ?? alert)
+        }
         guard (WidgetStore.loadAemetApiKey() ?? "").isEmpty == false else {
             guard let f = await OpenMeteoService.shared.fetchForecast(lat: loc.lat, lon: loc.lon) else { return nil }
             return AemetSnapshotBuilder.makeAemetSnapshot(
