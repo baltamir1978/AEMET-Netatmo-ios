@@ -36,10 +36,14 @@ final class LocationStore: ObservableObject {
     }
 
     private init() {
-        let list = WidgetStore.loadLocations().map(Self.migrate)
+        // `map { Self.migrate($0) }`, not `map(Self.migrate)`: handing a main-actor
+        // function to `map` as a *value* is a data-race warning under the project's
+        // default MainActor isolation, while calling it inside the closure runs it right
+        // here, in `init`'s own context.
+        let list = WidgetStore.loadLocations().map { Self.migrate($0) }
         locations = list
         selectedCode = WidgetStore.loadSelectedCode() ?? list.first?.code ?? ""
-        resolvedCurrent = WidgetStore.loadResolvedCurrent().map(Self.migrate)
+        resolvedCurrent = WidgetStore.loadResolvedCurrent().map { Self.migrate($0) }
         if let cur = resolvedCurrent { WidgetStore.saveResolvedCurrent(cur) }
         persist()
     }
@@ -270,11 +274,16 @@ final class LocationStore: ObservableObject {
         // `regionCode` (the region *within* a country) and a localized `fullAddress`
         // string. Routing a fix to the right national service deserves a stable ISO code,
         // and naming it deserves a real field — not substring matches on a translated
-        // address — so we keep the deprecated accessor until Apple exposes both.
+        // address — so we keep the deprecated accessor until Apple exposes both. (Nor is
+        // there anywhere to retreat to: `CLGeocoder.reverseGeocodeLocation`, the classic
+        // way to the same `CLPlacemark`, is deprecated in 26 too — pointing here.)
+        // One access, so the build carries one warning instead of three; when Apple does
+        // expose those fields, this line is the whole migration.
+        let placemark = item.placemark
         return GeocodedPlace(city: item.addressRepresentations?.cityName,
-                             subLocality: item.placemark.subLocality,
-                             thoroughfare: item.placemark.thoroughfare,
-                             country: item.placemark.isoCountryCode)
+                             subLocality: placemark.subLocality,
+                             thoroughfare: placemark.thoroughfare,
+                             country: placemark.isoCountryCode)
     }
 
     /// Resolve a GPS fix that landed in Portugal onto an IPMA-served location, and store
