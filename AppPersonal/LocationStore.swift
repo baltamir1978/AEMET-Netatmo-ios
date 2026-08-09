@@ -269,21 +269,38 @@ final class LocationStore: ObservableObject {
         request.preferredLocale = Locale(identifier: "es_ES")
         let items = try? await request.mapItems
         guard let item = items?.first else { return GeocodedPlace() }
-        // `placemark` is deprecated in iOS 26, but its replacement publishes neither the
-        // country nor the sublocality: `MKAddressRepresentations` offers `cityName`,
-        // `regionCode` (the region *within* a country) and a localized `fullAddress`
-        // string. Routing a fix to the right national service deserves a stable ISO code,
-        // and naming it deserves a real field — not substring matches on a translated
-        // address — so we keep the deprecated accessor until Apple exposes both. (Nor is
-        // there anywhere to retreat to: `CLGeocoder.reverseGeocodeLocation`, the classic
-        // way to the same `CLPlacemark`, is deprecated in 26 too — pointing here.)
-        // One access, so the build carries one warning instead of three; when Apple does
-        // expose those fields, this line is the whole migration.
-        let placemark = item.placemark
+        let legacy = Self.legacyFields(of: item)
         return GeocodedPlace(city: item.addressRepresentations?.cityName,
-                             subLocality: placemark.subLocality,
-                             thoroughfare: placemark.thoroughfare,
-                             country: placemark.isoCountryCode)
+                             subLocality: legacy.subLocality,
+                             thoroughfare: legacy.thoroughfare,
+                             country: legacy.country)
+    }
+
+    /// The two things a reverse-geocode has to tell us that iOS 26's replacement API
+    /// doesn't publish: the finer place inside a town, and which country the fix is in.
+    ///
+    /// `MKMapItem.placemark` is deprecated in 26, and there is nowhere to go: its
+    /// successor `MKAddressRepresentations` only offers `cityName`, `cityWithContext`,
+    /// `regionName`, `regionCode` (the region *within* a country) and a localized
+    /// `fullAddress` — no sublocality, no ISO country — and `MKAddress` is two display
+    /// strings. The classic route to the same `CLPlacemark`,
+    /// `CLGeocoder.reverseGeocodeLocation`, is deprecated in 26 as well, pointing at the
+    /// API we already use. Digging the country out of a translated address string is not
+    /// an option: it decides whether a fix is served by AEMET or by IPMA.
+    ///
+    /// So the call stays, and this is where it's quarantined: the one line in the app that
+    /// touches `placemark`, carrying the build's one deprecation warning. **The day
+    /// `MKAddressRepresentations` grows these fields, this method is the migration.**
+    ///
+    /// The warning is deliberately left standing. Wrapping the call in an `@available`
+    /// deprecated declaration was tried (both `deprecated: 26.0` and a far-future
+    /// version): the compiler just moves the warning to the caller. The only way to
+    /// actually silence it is to reach the property through KVC, which trades a
+    /// compile-time notice for a silent runtime failure the day Apple removes it.
+    private static func legacyFields(of item: MKMapItem)
+        -> (subLocality: String?, thoroughfare: String?, country: String?) {
+        let placemark = item.placemark
+        return (placemark.subLocality, placemark.thoroughfare, placemark.isoCountryCode)
     }
 
     /// Resolve a GPS fix that landed in Portugal onto an IPMA-served location, and store
