@@ -45,6 +45,7 @@ Cuatro widgets en tamaños pequeño, mediano y grande (`AppPersonalWidget`):
 - Configurables desde el propio widget (ciudad, estilo) vía `WidgetConfigIntent`.
 - **Deep links**: cada widget abre la sección correspondiente de la app.
 - Se refrescan solos: descargan sus propios datos y comparten caché con la app a través del App Group `group.Altamirano.AppPersonal`.
+- La app guarda un *snapshot* por ciudad, así que un widget fijado a cualquiera de tus ubicaciones tiene datos sin que la abras por ella. Los avisos a WidgetKit se agrupan (`LocationStore.nudgeWidgets`): WidgetKit tiene un cupo diario de recargas y, pasando páginas, avisar en cada una lo agotaría — y a partir de ahí iOS ignora las siguientes y los widgets se quedan congelados.
 
 ### General
 
@@ -135,6 +136,8 @@ AppPersonal/
 2. Crea `Secrets.swift` a partir de la plantilla (ver arriba) **o** deja los valores vacíos e introdúcelos en Ajustes.
 3. Selecciona tu *Team* de firma (app y extensión de widgets comparten el App Group).
 4. Compila y ejecuta.
+
+> **Un aviso de compilación, a propósito.** El proyecto compila con un único *warning*: `MKMapItem.placemark`, deprecado en iOS 26. No tiene arreglo: su sustituto (`MKAddressRepresentations`) no publica ni la *sublocalidad* ni el país ISO, y la ruta clásica al mismo `CLPlacemark` (`CLGeocoder`) está deprecada también, apuntando a la API que ya usamos. De esos dos campos dependen mostrar «Chamberí» en vez de «Madrid» y decidir si un punto lo sirve AEMET o el IPMA. Está encerrado en `LocationStore.legacyFields(of:)`, la única línea de la app que lo toca.
 
 ## Seguridad
 
