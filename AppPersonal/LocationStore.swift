@@ -106,17 +106,19 @@ final class LocationStore: ObservableObject {
         // *centroid* is Alcobendas (Madrid's centroid sits ~15 km south, downtown).
         // So we reverse-geocode to learn the real town name and match THAT to AEMET's
         // catalog; nearest-centroid is only the fallback when the geocoder is offline.
-        let cityName = await reverseGeocodeCity(coord)
-        let municipio = cityName.flatMap { matchMunicipio(named: $0) }
+        let place = await reverseGeocode(coord)
+        // Match the *municipio* name, never the displayed one: AEMET has no entry for a
+        // parroquia or a city district, so matching "Posada" (or "Chamberí") finds nothing
+        // and drops us into the nearest-centroid fallback this lookup exists to avoid.
+        let municipio = place.city.flatMap { matchMunicipio(named: $0) }
             ?? nearestMunicipio(to: coord)
         guard let n = municipio else { return false }
         // Observation station (real readings, e.g. "Madrid, El Goloso") + a friendly label:
-        // the one the user pinned for this municipio, else the nearest. The station name
-        // reliably yields "El Goloso"; the geocoded city is the fallback, then the municipio.
+        // the one the user pinned for this municipio, else the nearest.
         let station = await station(forCode: n.codMunicipio, near: coord)
-        // Show the *real* town as the primary name (geocoded city, else the municipio);
-        // the station is surfaced separately as context + its estimated distance.
-        let realPlace = cityName ?? n.nombre
+        // Show the *finest* real place we know; the station is surfaced separately as
+        // context + its estimated distance.
+        let realPlace = await placeName(place, at: coord, ine: n.codMunicipio) ?? n.nombre
         let stationName = station.map { Self.shortStationName($0.0.nombre) }
         let stationDist = station.map { distanceKm(coord, $0.1) }
         // Carry the GPS fix, not the municipio centroid (`n.lat/n.lon`): the station above
@@ -163,26 +165,92 @@ final class LocationStore: ObservableObject {
         return true
     }
 
-    /// Reverse-geocode a coordinate to its city/town name (e.g. "Madrid"), Spanish locale.
-    /// Uses MapKit's MKReverseGeocodingRequest (CLGeocoder is deprecated since iOS 26).
-    private func reverseGeocodeCity(_ coord: CLLocationCoordinate2D) async -> String? {
-        await reverseGeocode(coord).city
+    /// What one reverse-geocoding round-trip tells us about a coordinate.
+    ///
+    /// `city` and `displayName` are deliberately *not* the same thing. AEMET's catalog is
+    /// keyed by municipio, so any lookup has to use the municipio name ("Llanes"); but the
+    /// place you are actually standing in is often a smaller entity that owns no municipio
+    /// of its own — a parroquia in Asturias, a district of a big city. Showing the municipio
+    /// there reads as wrong ("Llanes" while you're in Posada de Llanes), so the UI takes
+    /// the finer name and the catalog keeps the coarser one.
+    private struct GeocodedPlace {
+        /// Municipio/city as MapKit reports it: "Llanes", "Madrid".
+        var city: String?
+        /// District inside the city, when MapKit knows one: "Chamberí", "Fuencarral-El
+        /// Pardo". Nil in towns with nothing below the municipio — including, sadly, every
+        /// Asturian parroquia: the whole concejo of Llanes geocodes with `subLocality` nil,
+        /// so Posada de Llanes cannot be told from Niembro here (only the postal code
+        /// differs). Districts are a big-city affair.
+        var subLocality: String?
+        /// Street of the fix. Kept only to sanity-check `subLocality` — see `displayName`.
+        var thoroughfare: String?
+        var country: String?
+
+        /// The name to put on screen: the district when there is a real one, else the town.
+        var displayName: String? {
+            guard let sub = subLocality, !sub.isEmpty else { return city }
+            // MapKit sometimes repeats the town as its own sublocality; that's not detail.
+            guard sub.caseInsensitiveCompare(city ?? "") != .orderedSame else { return city }
+            // In towns with no districts the field gets filled with the *street* instead:
+            // standing at the aqueduct in Segovia yields subLocality "Plaza del Azoguejo",
+            // which as a location name is nonsense. A genuine district never matches the
+            // street you're on ("Chamberí" vs "Cardenal Cisneros"), so that equality is a
+            // reliable tell.
+            guard sub.caseInsensitiveCompare(thoroughfare ?? "") != .orderedSame else { return city }
+            // Portugal merged its parishes into "uniões de freguesias" that keep every old
+            // name: downtown Porto geocodes to a 100-character list. A place name has to
+            // fit a small widget, so anything enumerating names (commas) or longer than
+            // the longest real city name we show ("Las Palmas de Gran Canaria") loses.
+            guard !sub.contains(","), sub.count <= 28 else { return city }
+            return sub
+        }
     }
 
-    /// Town name plus ISO country code, so a fix can be routed to the right national
-    /// service. Both come from one geocoding round-trip.
-    private func reverseGeocode(_ coord: CLLocationCoordinate2D) async -> (city: String?, country: String?) {
+    /// The name to show for a fix: the finest real place we can put under it.
+    ///
+    /// Two sources, in this order, because each one covers what the other misses:
+    /// MapKit knows the districts of big cities (Chamberí, Gràcia) and nothing below
+    /// the municipio anywhere else; the bundled nomenclátor knows the villages and
+    /// parroquias (Posada, Niembro) that own no municipio of their own. `ine` anchors
+    /// the second lookup to the municipio AEMET already resolved.
+    private func placeName(_ place: GeocodedPlace,
+                           at coord: CLLocationCoordinate2D,
+                           ine: String?) async -> String? {
+        // A district from MapKit is more specific than any village lookup would be, and
+        // it's the name a city dweller expects to read.
+        if let display = place.displayName, display != place.city { return display }
+        // Off the main actor: the first call parses ~29k rows, and this runs while the
+        // location card is on screen.
+        let nucleo = await Task.detached(priority: .userInitiated) {
+            Nomenclator.nearest(to: coord, ine: ine)
+        }.value
+        return nucleo?.name ?? place.displayName
+    }
+
+    /// Reverse-geocode a coordinate to the name to display for it, Spanish locale.
+    private func reverseGeocodeCity(_ coord: CLLocationCoordinate2D) async -> String? {
+        let place = await reverseGeocode(coord)
+        return await placeName(place, at: coord, ine: nil)
+    }
+
+    /// Town name, the finer place inside it, and the ISO country code — so a fix can be
+    /// labelled and routed to the right national service off one geocoding round-trip.
+    private func reverseGeocode(_ coord: CLLocationCoordinate2D) async -> GeocodedPlace {
         let loc = CLLocation(latitude: coord.latitude, longitude: coord.longitude)
-        guard let request = MKReverseGeocodingRequest(location: loc) else { return (nil, nil) }
+        guard let request = MKReverseGeocodingRequest(location: loc) else { return GeocodedPlace() }
         request.preferredLocale = Locale(identifier: "es_ES")
         let items = try? await request.mapItems
-        guard let item = items?.first else { return (nil, nil) }
-        // `placemark` is deprecated in iOS 26, but its replacement publishes no country:
-        // `MKAddressRepresentations` offers `regionCode` (the region *within* a country)
-        // and a localized `fullAddress` string. Routing a fix to the right national
-        // service deserves a stable ISO code, not a substring match on a translated
-        // address, so we keep the deprecated accessor until Apple exposes the country.
-        return (item.addressRepresentations?.cityName, item.placemark.isoCountryCode)
+        guard let item = items?.first else { return GeocodedPlace() }
+        // `placemark` is deprecated in iOS 26, but its replacement publishes neither the
+        // country nor the sublocality: `MKAddressRepresentations` offers `cityName`,
+        // `regionCode` (the region *within* a country) and a localized `fullAddress`
+        // string. Routing a fix to the right national service deserves a stable ISO code,
+        // and naming it deserves a real field — not substring matches on a translated
+        // address — so we keep the deprecated accessor until Apple exposes both.
+        return GeocodedPlace(city: item.addressRepresentations?.cityName,
+                             subLocality: item.placemark.subLocality,
+                             thoroughfare: item.placemark.thoroughfare,
+                             country: item.placemark.isoCountryCode)
     }
 
     /// Resolve a GPS fix that landed in Portugal onto an IPMA-served location, and store
@@ -193,10 +261,10 @@ final class LocationStore: ObservableObject {
     /// point it reads, which is what routes every later fetch to IPMA (or, further from a
     /// district capital, to Open-Meteo — the user's pick in the source sheet).
     private func resolvePortugueseCurrent(_ coord: CLLocationCoordinate2D) async -> Bool? {
-        let (city, country) = await reverseGeocode(coord)
-        guard country == "PT" else { return nil }
+        let place = await reverseGeocode(coord)
+        guard place.country == "PT" else { return nil }
         guard let near = IPMA.nearest(to: coord.latitude, coord.longitude) else { return nil }
-        var loc = SavedLocation(code: near.location.code, name: city ?? near.location.name,
+        var loc = SavedLocation(code: near.location.code, name: place.displayName ?? near.location.name,
                                 province: nil, lat: coord.latitude, lon: coord.longitude,
                                 idema: nil, tz: near.location.timeZone)
         loc.stationName = Self.sourceLabel(for: loc)

@@ -1050,6 +1050,34 @@
         }
       }
     },
+    "Datos": {
+      "localizations": {
+        "ca": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dades"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Data"
+          }
+        },
+        "eu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Datuak"
+          }
+        },
+        "gl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Datos"
+          }
+        }
+      }
+    },
     "Despejado": {
       "localizations": {
         "ca": {
@@ -2651,6 +2679,34 @@
       }
     },
     "Los módulos se detectan automáticamente desde tu cuenta Netatmo. No hace falta introducirlos a mano.": {},
+    "Los nombres de pueblos y aldeas proceden de GeoNames, bajo licencia CC BY 4.0.": {
+      "localizations": {
+        "ca": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Els noms de pobles i llogarets provenen de GeoNames, amb llicència CC BY 4.0."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Village and hamlet names come from GeoNames, licensed CC BY 4.0."
+          }
+        },
+        "eu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Herri eta auzoen izenak GeoNames-etik datoz, CC BY 4.0 lizentziapean."
+          }
+        },
+        "gl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Os nomes de vilas e aldeas proceden de GeoNames, baixo licenza CC BY 4.0."
+          }
+        }
+      }
+    },
     "Luna llena": {
       "extractionState": "stale",
       "localizations": {

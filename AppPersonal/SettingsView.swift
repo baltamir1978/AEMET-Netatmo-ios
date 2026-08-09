@@ -11,6 +11,7 @@ struct SettingsView: View {
                 netatmoSection
                 stationSection
                 helpSection
+                creditsSection
             }
             .navigationTitle("Ajustes")
         }
@@ -159,6 +160,20 @@ struct SettingsView: View {
                 Text(AppConfiguration.shared.isAemetConfigured ? "✓" : "Pendiente")
                     .foregroundStyle(.secondary).font(.caption)
             }
+        }
+    }
+
+    // MARK: - Credits
+
+    /// GeoNames ships under CC BY 4.0, which asks for credit wherever its data is used —
+    /// here, every village name the app puts under your GPS fix.
+    private var creditsSection: some View {
+        Section {
+            Text("Los nombres de pueblos y aldeas proceden de GeoNames, bajo licencia CC BY 4.0.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        } header: {
+            Text("Datos")
         }
     }
 }

@@ -47,6 +47,7 @@ Cuatro widgets en tamaños pequeño, mediano y grande (`AppPersonalWidget`):
 
 ### General
 
+- 📍 **El pueblo, no el municipio** (`Nomenclator.swift`): el geocodificador de Apple sólo llega al municipio — en todo el concejo de Llanes devuelve «Llanes», y Posada, Niembro o Barro salen con el mismo nombre. La app lleva embarcado un nomenclátor de ~29.000 núcleos de población (`Nucleos.tsv`, generado por `Tools/build_nomenclator.py`) y busca el más cercano, anclado por código INE al municipio que ya resolvió AEMET. En las ciudades grandes manda MapKit, que sí conoce los distritos (Chamberí, Gràcia, Triana).
 - 🔄 **Refresco en segundo plano** con `BGAppRefreshTask` e intervalo configurable (`BackgroundRefresher`).
 - 🌗 **Modo claro y oscuro** con tintes adaptativos (`Theme.swift`, `WidgetTheme.swift`).
 - 🗣️ **Localizada** en español (idioma base), inglés, gallego, euskera y catalán (`Localizable.xcstrings`).
@@ -103,6 +104,8 @@ AppPersonal/
 │   ├── SunMoonService.swift / MoonPhasesService.swift
 │   ├── TidesService.swift / AstroEventsService.swift
 │   ├── LocationStore.swift / CurrentLocationService.swift
+│   ├── Nomenclator.swift           # Núcleos de población (pueblos y aldeas)
+│   ├── Nucleos.tsv                 # Nomenclátor embebido (GeoNames, CC BY 4.0)
 │   ├── BackgroundRefresher.swift   # BGAppRefreshTask
 │   ├── AppConfiguration.swift      # Configuración (UserDefaults)
 │   ├── Theme.swift / Models.swift
@@ -116,7 +119,9 @@ AppPersonal/
 ├── Shared/                         # Código compartido app ↔ widget
 │   ├── AemetSnapshotBuilder.swift
 │   └── WidgetShared.swift          # App Group y modelos de snapshot
-├── Tools/generate_icon.py
+├── Tools/
+│   ├── generate_icon.py
+│   └── build_nomenclator.py        # Regenera Nucleos.tsv desde GeoNames
 ├── Secrets.swift.example           # Plantilla de credenciales
 └── AppPersonal.xcodeproj
 ```
@@ -136,3 +141,9 @@ AppPersonal/
 ## Licencia
 
 Proyecto personal de Bruno Altamirano. Datos meteorológicos cortesía de **AEMET**, **IPMA**, **Open-Meteo**, **Netatmo** e **Instituto Hidrográfico de la Marina** (sujetos a sus respectivos términos de uso).
+
+Los nombres de núcleos de población proceden de [**GeoNames**](https://www.geonames.org/), bajo licencia [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). La atribución aparece también en Ajustes → Datos. Para regenerar el fichero:
+
+```bash
+python3 Tools/build_nomenclator.py
+```
