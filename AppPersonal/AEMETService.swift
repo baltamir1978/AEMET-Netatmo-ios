@@ -97,20 +97,27 @@ struct AEMETService {
     //
     // Let a view paint instantly from the last good payload on launch (no await,
     // no network) so the screen never flashes blank before the live refresh lands.
+    //
+    // Each one hands back the payload's age too: a page primed from disk has to date its
+    // "Actualizado …" footer from when the data was *written*, not from when it was read.
 
-    func cachedDaily(municipio: String) -> AemetDailyRoot? {
-        guard let c = AemetDiskCache.load("diaria_\(municipio)") else { return nil }
-        return try? Self.decodeDaily(c.data)
+    func cachedDaily(municipio: String) -> (root: AemetDailyRoot, age: TimeInterval)? {
+        guard let c = AemetDiskCache.load("diaria_\(municipio)"),
+              let root = try? Self.decodeDaily(c.data) else { return nil }
+        return (root, c.age)
     }
 
-    func cachedHourly(municipio: String) -> AemetHourlyRoot? {
-        guard let c = AemetDiskCache.load("horaria_\(municipio)") else { return nil }
-        return try? Self.decodeHourly(c.data)
+    func cachedHourly(municipio: String) -> (root: AemetHourlyRoot, age: TimeInterval)? {
+        guard let c = AemetDiskCache.load("horaria_\(municipio)"),
+              let root = try? Self.decodeHourly(c.data) else { return nil }
+        return (root, c.age)
     }
 
-    func cachedObservation(idema: String) -> [AemetObservationRecord]? {
-        guard let c = AemetDiskCache.load("obs_\(idema)") else { return nil }
-        return try? JSONDecoder().decode([AemetObservationRecord].self, from: c.data)
+    func cachedObservation(idema: String) -> (records: [AemetObservationRecord], age: TimeInterval)? {
+        guard let c = AemetDiskCache.load("obs_\(idema)"),
+              let records = try? JSONDecoder().decode([AemetObservationRecord].self, from: c.data)
+        else { return nil }
+        return (records, c.age)
     }
 
     // MARK: - Municipality catalog

@@ -169,6 +169,35 @@
         }
       }
     },
+    "AEMET no disponible: %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "ca": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AEMET no disponible: %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AEMET unavailable: %@"
+          }
+        },
+        "eu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AEMET ez dago erabilgarri: %@"
+          }
+        },
+        "gl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AEMET non dispoñible: %@"
+          }
+        }
+      }
+    },
     "AEMET sin respuesta · datos anteriores": {
       "extractionState": "stale",
       "localizations": {
@@ -1074,6 +1103,35 @@
           "stringUnit": {
             "state": "translated",
             "value": "Datos"
+          }
+        }
+      }
+    },
+    "Desliza para cambiar de ubicación": {
+      "extractionState": "manual",
+      "localizations": {
+        "ca": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Llisca per canviar d'ubicació"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Swipe to change location"
+          }
+        },
+        "eu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lerratu kokapena aldatzeko"
+          }
+        },
+        "gl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desliza para cambiar de localización"
           }
         }
       }
@@ -3648,6 +3706,35 @@
         }
       }
     },
+    "No se pudo cargar la previsión (IPMA).": {
+      "extractionState": "manual",
+      "localizations": {
+        "ca": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No s'ha pogut carregar la previsió (IPMA)."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't load the forecast (IPMA)."
+          }
+        },
+        "eu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ezin izan da iragarpena kargatu (IPMA)."
+          }
+        },
+        "gl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Non se puido cargar a previsión (IPMA)."
+          }
+        }
+      }
+    },
     "No se pudo cargar la previsión (Open-Meteo).": {
       "extractionState": "stale",
       "localizations": {
@@ -5250,6 +5337,35 @@
           "stringUnit": {
             "state": "translated",
             "value": "vermello"
+          }
+        }
+      }
+    },
+    "sin respuesta": {
+      "extractionState": "manual",
+      "localizations": {
+        "ca": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "sense resposta"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "no response"
+          }
+        },
+        "eu": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "erantzunik ez"
+          }
+        },
+        "gl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "sen resposta"
           }
         }
       }

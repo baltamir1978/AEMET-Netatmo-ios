@@ -69,7 +69,29 @@ final class LocationStore: ObservableObject {
     func select(_ code: String) {
         guard code == SavedLocation.currentCode || locations.contains(where: { $0.code == code }) else { return }
         selectedCode = code
-        persist()
+        // Only the selection changed, so save that alone and nudge the widgets *later*:
+        // the Tiempo tab is a pager now, and reloading every timeline on each swipe burns
+        // WidgetKit's daily reload budget for nothing — past it iOS starts ignoring
+        // reloads and the widgets freeze. Nothing a widget shows depends on which page
+        // you happen to be looking at, except the "follow the app" mode, and that can
+        // wait until you settle.
+        WidgetStore.saveSelectedCode(code)
+        nudgeWidgets()
+    }
+
+    private var reloadTask: Task<Void, Never>?
+
+    /// Reload widget timelines once things settle, cancelling any pending nudge. Use this
+    /// instead of `WidgetCenter.reloadAllTimelines()` for anything the user can trigger
+    /// repeatedly in a few seconds.
+    func nudgeWidgets(after seconds: Double = 3) {
+        reloadTask?.cancel()
+        reloadTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(seconds))
+            guard !Task.isCancelled else { return }
+            WidgetCenter.shared.reloadAllTimelines()
+            self?.reloadTask = nil
+        }
     }
 
     private var lastCurrentRefresh = Date.distantPast
@@ -77,18 +99,20 @@ final class LocationStore: ObservableObject {
     /// Re-resolve the GPS "Ubicación actual" entry for widgets even when the app shows a
     /// fixed city. That entry's `resolvedCurrent` is only refreshed in-app, so without
     /// this a widget set to "📍 Ubicación actual" freezes at the town GPS last resolved.
-    /// Throttled; `resolveCurrent` reloads widget timelines on success.
-    func refreshCurrentForWidgets() async {
-        guard selectedCode != SavedLocation.currentCode else { return }   // already refreshed on-screen
-        guard Date().timeIntervalSince(lastCurrentRefresh) > 10 * 60 else { return }
+    /// Throttled; `resolveCurrent` reloads widget timelines on success. Returns whether it
+    /// actually did the work, so a caller that only exists to keep the widget's copy fresh
+    /// can stop right here instead of re-fetching a forecast on every city swipe.
+    @discardableResult
+    func refreshCurrentForWidgets() async -> Bool {
+        guard selectedCode != SavedLocation.currentCode else { return false }   // already refreshed on-screen
+        guard Date().timeIntervalSince(lastCurrentRefresh) > 10 * 60 else { return false }
         lastCurrentRefresh = Date()
         // Without a key there is no municipio catalog nor station network to resolve
         // against — Open-Meteo is queried straight from the coordinate.
         if AppConfiguration.shared.isAemetConfigured {
-            _ = await resolveCurrent()
-        } else {
-            _ = await resolveCurrentBasic()
+            return await resolveCurrent()
         }
+        return await resolveCurrentBasic()
     }
 
     /// Fetch a GPS fix and resolve it to the AEMET municipio + observation station.
@@ -142,7 +166,7 @@ final class LocationStore: ObservableObject {
         if let (s, sCoord) = station, locations.contains(where: { $0.code == n.codMunicipio }) {
             apply(station: s, km: distanceKm(coord, sCoord), toCode: n.codMunicipio)
         }
-        WidgetCenter.shared.reloadAllTimelines()
+        nudgeWidgets()
         return true
     }
 
@@ -161,7 +185,7 @@ final class LocationStore: ObservableObject {
                                                                      lat: coord.latitude, lon: coord.longitude))
         resolvedCurrent = loc
         WidgetStore.saveResolvedCurrent(loc)
-        WidgetCenter.shared.reloadAllTimelines()
+        nudgeWidgets()
         return true
     }
 
@@ -271,7 +295,7 @@ final class LocationStore: ObservableObject {
         loc.stationDistanceKm = IPMA.source(for: loc) == .ipma ? near.km : nil
         resolvedCurrent = loc
         WidgetStore.saveResolvedCurrent(loc)
-        WidgetCenter.shared.reloadAllTimelines()
+        nudgeWidgets()
         return true
     }
 
@@ -561,6 +585,6 @@ final class LocationStore: ObservableObject {
     private func persist() {
         WidgetStore.saveLocations(locations)
         WidgetStore.saveSelectedCode(selectedCode)
-        WidgetCenter.shared.reloadAllTimelines()
+        nudgeWidgets()
     }
 }

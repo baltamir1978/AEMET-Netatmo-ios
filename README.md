@@ -12,6 +12,7 @@ App de iOS personal que reúne en un solo lugar la predicción y los avisos de *
 - 🌦️ **Predicción oficial de AEMET**: por horas y por días desde la API OpenData (`AEMETService`), con temperatura actual observada de la estación más cercana.
 - ⚠️ **Avisos meteorológicos** en formato CAP por comunidad autónoma (`AEMETAlertsService`).
 - 📍 **Ubicación actual o ciudades seguidas**: busca municipios y guarda los que uses a diario (`LocationStore`, `LocationManagerSheet`, `CurrentLocationService`).
+- 👆 **Una página por ubicación**: se pasa de una a otra deslizando, con su indicador de puntos (la flecha marca la ubicación GPS). Cada página guarda su propia previsión (`CityWeather`, `AemetCityView`) y se pinta desde la caché en disco nada más aparecer, así que una ciudad ya visitada vuelve al instante — y nunca se ve el tiempo de la ciudad anterior bajo el nombre de la nueva. Las páginas de al lado se preparan por adelantado, incluidas las portuguesas, cuya caché no se puede leer de golpe.
 - 🗼 **Selector de estación**: AEMET asigna la más cercana, pero puedes fijar otra por municipio cuando la de al lado no es la de tu valle (`StationPickerSheet`).
 - 🌍 **Sin API key de AEMET también funciona**: la pestaña se sirve completa desde **Open-Meteo** (`OpenMeteoService`), sin cambiar la interfaz.
 - 🇵🇹 **Portugal, con el IPMA** (`IPMAService`): previsión horaria y diaria, observaciones de estación y avisos oficiales del Instituto Português do Mar e da Atmosfera, sin API key. Su catálogo abierto son 35 localidades, así que el selector de estación se convierte allí en un **selector de fuente**: IPMA (capital más próxima, con su distancia) u Open-Meteo en tu coordenada exacta. Fuera de esas 35, Open-Meteo es el valor por defecto a partir de 25 km.
@@ -90,7 +91,9 @@ AppPersonal/
 ├── AppPersonal/                    # Target de la app
 │   ├── AppPersonalApp.swift        # Punto de entrada + deep links
 │   ├── ContentView.swift           # Navegación por pestañas
-│   ├── AemetView.swift             # Predicción, avisos y estación
+│   ├── AemetView.swift             # Pestaña Tiempo: páginas por ubicación y carga
+│   ├── AemetCityView.swift         # Predicción, avisos y estación de UNA ubicación
+│   ├── CityWeather.swift           # Datos meteorológicos de una ubicación (+ caché)
 │   ├── CosmosView.swift            # Sol·Luna, mareas y eventos
 │   ├── ActualView.swift            # Datos actuales de Netatmo
 │   ├── GraficasView.swift          # Gráficas históricas

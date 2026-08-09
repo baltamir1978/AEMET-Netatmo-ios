@@ -282,10 +282,12 @@ enum WidgetStore {
         }
     }
 
-    static func save(aemet snap: AemetSnapshot) {
+    /// Pass `reloadWidgets: false` when the caller can fire repeatedly in a few seconds
+    /// (the Tiempo tab's pager does) and will nudge the widgets itself once things settle.
+    static func save(aemet snap: AemetSnapshot, reloadWidgets: Bool = true) {
         if let data = try? JSONEncoder().encode(snap) {
             defaults?.set(data, forKey: aemetKey)
-            reload()
+            if reloadWidgets { reload() }
         }
     }
 
