@@ -65,6 +65,9 @@ struct TidesEntry: TimelineEntry {
     let stationName: String
     let extrema: [TideExtreme]
     let dayStart: Date
+    /// The port's own zone: `dayStart` is midnight there, and every label is printed on
+    /// that clock (a Canary port is an hour behind the peninsula, Tánger and Lisboa too).
+    let timeZone: TimeZone
     let sunriseMin: Double?   // minutes from dayStart, station's sunrise
     let sunsetMin: Double?    // minutes from dayStart, station's sunset
 }
@@ -73,9 +76,10 @@ struct TidesEntry: TimelineEntry {
 
 struct TidesProvider: AppIntentTimelineProvider {
     func placeholder(in context: Context) -> TidesEntry {
-        let day = Self.dayStart(Date())
+        let zone = TimeZone(identifier: "Europe/Madrid")!
+        let day = Self.dayStart(Date(), zone: zone)
         return TidesEntry(date: Date(), stationName: "Mareas",
-                          extrema: Self.sampleExtrema(from: Date()), dayStart: day,
+                          extrema: Self.sampleExtrema(from: Date()), dayStart: day, timeZone: zone,
                           sunriseMin: 8 * 60, sunsetMin: 21 * 60)
     }
 
@@ -86,7 +90,8 @@ struct TidesProvider: AppIntentTimelineProvider {
     func timeline(for configuration: SelectTideStationIntent, in context: Context) async -> Timeline<TidesEntry> {
         let now = Date()
         let station = resolveTideStation(configuration)
-        let dayStart = Self.dayStart(now)
+        let zone = station.timeZone
+        let dayStart = Self.dayStart(now, zone: zone)
         let extrema = await Self.fetchExtrema(station: station, dayStart: dayStart)
         let sun = Self.sunTimes(station: station, dayStart: dayStart)
 
@@ -95,7 +100,7 @@ struct TidesProvider: AppIntentTimelineProvider {
         let entries = (0..<18).compactMap { step -> TidesEntry? in
             Calendar.current.date(byAdding: .minute, value: step * 20, to: now).map {
                 TidesEntry(date: $0, stationName: station.name, extrema: extrema, dayStart: dayStart,
-                           sunriseMin: sun.rise, sunsetMin: sun.set)
+                           timeZone: zone, sunriseMin: sun.rise, sunsetMin: sun.set)
             }
         }
         let refresh = Calendar.current.date(byAdding: .hour, value: 6, to: now) ?? now
@@ -104,43 +109,56 @@ struct TidesProvider: AppIntentTimelineProvider {
 
     private func entry(for configuration: SelectTideStationIntent, at date: Date) async -> TidesEntry {
         let station = resolveTideStation(configuration)
-        let dayStart = Self.dayStart(date)
+        let zone = station.timeZone
+        let dayStart = Self.dayStart(date, zone: zone)
         let extrema = await Self.fetchExtrema(station: station, dayStart: dayStart)
         let sun = Self.sunTimes(station: station, dayStart: dayStart)
         return TidesEntry(date: date, stationName: station.name, extrema: extrema, dayStart: dayStart,
-                          sunriseMin: sun.rise, sunsetMin: sun.set)
+                          timeZone: zone, sunriseMin: sun.rise, sunsetMin: sun.set)
     }
 
     /// The station's sunrise/sunset (minutes from dayStart) so the widget can tell
     /// day from night and label both times.
     private static func sunTimes(station: TideStation, dayStart: Date) -> (rise: Double?, set: Double?) {
         let loc = SunMoonLocation(key: station.id, name: station.name,
-                                  lat: station.lat, lon: station.lon, elevation: 0, tz: "Europe/Madrid")
+                                  lat: station.lat, lon: station.lon, elevation: 0,
+                                  tz: station.timeZone.identifier)
         let r = SunMoonService.shared.calculate(location: loc, date: dayStart)
         return (r.sun.sunrise.flatMap(minutes(from:)), r.sun.sunset.flatMap(minutes(from:)))
     }
 
     // MARK: Data
 
-    private static func dayStart(_ date: Date) -> Date {
+    private static func dayStart(_ date: Date, zone: TimeZone) -> Date {
         var cal = Calendar(identifier: .gregorian)
-        cal.timeZone = TimeZone(identifier: "Europe/Madrid")!
+        cal.timeZone = zone
         return cal.startOfDay(for: date)
     }
 
     private static func fetchExtrema(station: TideStation, dayStart: Date) async -> [TideExtreme] {
         guard let pair = try? await TidesService.shared.tides(
             for: dayStart, stationId: station.id, stationName: station.name) else { return [] }
-        return extrema(from: pair)
+        return extrema(from: pair, dayStart: dayStart, zone: station.timeZone)
     }
 
     /// Flatten a two-day tide pair into a sorted extrema list in minutes-from-dayStart.
-    private static func extrema(from pair: TidesDayPair) -> [TideExtreme] {
+    /// Each day is anchored on its own midnight rather than on a fixed 1440, so the
+    /// clock change doesn't slide tomorrow's tides by an hour.
+    private static func extrema(from pair: TidesDayPair, dayStart: Date, zone: TimeZone) -> [TideExtreme] {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = zone
+        let dayFmt = DateFormatter()
+        dayFmt.locale = Locale(identifier: "en_US_POSIX")
+        dayFmt.dateFormat = "yyyy-MM-dd"
+        dayFmt.timeZone = zone
+
         var out: [TideExtreme] = []
-        for (dayIndex, day) in pair.days.enumerated() {
+        for day in pair.days {
+            guard let parsed = dayFmt.date(from: day.date) else { continue }
+            let base = cal.startOfDay(for: parsed).timeIntervalSince(dayStart) / 60
             for tide in day.tides {
                 guard let m = minutes(from: tide.time) else { continue }
-                out.append(TideExtreme(minutes: m + Double(dayIndex) * 1440,
+                out.append(TideExtreme(minutes: base + m,
                                        height: tide.height,
                                        isHigh: tide.type == "pleamar"))
             }
@@ -435,7 +453,7 @@ struct TidesWidgetView: View {
         let date = entry.dayStart.addingTimeInterval(minutes * 60)
         let f = DateFormatter()
         f.locale = Locale(identifier: "es_ES")
-        f.timeZone = TimeZone(identifier: "Europe/Madrid")
+        f.timeZone = entry.timeZone
         f.dateFormat = "HH:mm"
         return f.string(from: date)
     }

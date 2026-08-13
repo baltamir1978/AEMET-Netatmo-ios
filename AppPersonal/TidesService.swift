@@ -7,6 +7,15 @@ struct TideStation: Identifiable {
     let name: String
     let lat: Double
     let lon: Double
+    /// Only for the two ports that don't run on Spanish time; the rest read their zone
+    /// off the coordinates, like every other location in the app.
+    var tzOverride: String? = nil
+
+    /// The clock the port's tide times are printed on.
+    nonisolated var timeZone: TimeZone {
+        let id = tzOverride ?? SavedLocation.timeZoneIdentifier(code: "", lat: lat, lon: lon)
+        return TimeZone(identifier: id) ?? TimeZone(identifier: "Europe/Madrid")!
+    }
 }
 
 // MARK: - Tide (used by TidesService, CosmosView and the tides widget)
@@ -52,7 +61,7 @@ let ihmStations: [TideStation] = [
     TideStation(id: "34", name: "Isla Cristina",                  lat: 37.20, lon: -7.32),
     TideStation(id: "43", name: "La Carraca",                     lat: 36.49, lon: -6.20),
     TideStation(id: "70", name: "Langosteira (A Coruña exterior)",lat: 43.35, lon: -8.50),
-    TideStation(id: "31", name: "Lisboa",                         lat: 38.71, lon: -9.14),
+    TideStation(id: "31", name: "Lisboa",                         lat: 38.71, lon: -9.14, tzOverride: "Europe/Lisbon"),
     TideStation(id: "4",  name: "Llanes",                         lat: 43.42, lon: -4.75),
     TideStation(id: "63", name: "Los Cristianos (Tenerife)",      lat: 28.05, lon: -16.72),
     TideStation(id: "61", name: "Los Gigantes (Tenerife)",        lat: 28.24, lon: -16.84),
@@ -84,7 +93,7 @@ let ihmStations: [TideStation] = [
     TideStation(id: "27", name: "Sanxenxo (Ría de Pontevedra)",   lat: 42.40, lon: -8.81),
     TideStation(id: "38", name: "Sevilla",                        lat: 37.33, lon: -6.00),
     TideStation(id: "50", name: "Sotogrande",                     lat: 36.28, lon: -5.27),
-    TideStation(id: "52", name: "Tánger",                         lat: 35.78, lon: -5.81),
+    TideStation(id: "52", name: "Tánger",                         lat: 35.78, lon: -5.81, tzOverride: "Africa/Casablanca"),
     TideStation(id: "10", name: "Tapia",                          lat: 43.57, lon: -6.94),
     TideStation(id: "48", name: "Tarifa",                         lat: 36.01, lon: -5.61),
     TideStation(id: "29", name: "Vigo",                           lat: 42.24, lon: -8.73),
@@ -97,57 +106,107 @@ struct TidesService {
     static let shared = TidesService()
     private let base = "https://ideihm.covam.es/api-ihm/getmarea"
 
+    /// The two days of tides starting at `date`, with every time already on the port's
+    /// own clock (peninsular, canaria, portuguesa o marroquí).
     func tides(for date: Date, stationId: String = "4", stationName: String = "Llanes") async throws -> TidesDayPair {
-        // Which calendar day to ask for is the port's own, not the peninsula's: on a
-        // Canary port between 23:00 and midnight local it is already tomorrow in Madrid,
-        // and we'd fetch the wrong day's table.
-        let port = ihmStations.first { $0.id == stationId }
-        let zone = port.map { SavedLocation.timeZoneIdentifier(code: "", lat: $0.lat, lon: $0.lon) }
-            ?? "Europe/Madrid"
-        let fmt = DateFormatter()
-        fmt.dateFormat = "yyyyMMdd"
-        fmt.timeZone = TimeZone(identifier: zone)
+        let zone = (ihmStations.first { $0.id == stationId })?.timeZone
+            ?? TimeZone(identifier: "Europe/Madrid")!
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = zone
 
-        let cal = Calendar.current
-        var days: [TideDayResult] = []
-        for offset in 0...1 {
-            let d = cal.date(byAdding: .day, value: offset, to: date)!
-            let dateStr = fmt.string(from: d)
-            var comps = URLComponents(string: base)!
-            comps.queryItems = [
-                URLQueryItem(name: "request", value: "gettide"),
-                URLQueryItem(name: "id",      value: stationId),
-                URLQueryItem(name: "format",  value: "json"),
-                URLQueryItem(name: "date",    value: dateStr),
-            ]
-            let isoDate = ISO8601DateFormatter()
-            isoDate.formatOptions = [.withFullDate]
-            isoDate.timeZone = TimeZone(identifier: zone)   // label the day in port time too
-            // A published day's tide table never changes, so a cache hit is final:
-            // no network call, and the card paints on the first frame.
-            if let cached = TidesDiskCache.load(station: stationId, day: dateStr) {
-                days.append(TideDayResult(date: isoDate.string(from: d), tides: cached))
-                continue
+        let day0 = cal.startOfDay(for: date)
+        let day1 = cal.date(byAdding: .day, value: 1, to: day0)!
+        let end  = cal.date(byAdding: .day, value: 1, to: day1)!
+
+        // IHM publishes its tables in UTC, so each local day is served by the UTC days
+        // that overlap it: at +02:00 the first tide of the day is often still listed on
+        // yesterday's table, and the last one spills onto tomorrow's.
+        var stamped: [(at: Date, tide: Tide)] = []
+        for utcDay in Self.utcDays(from: day0, to: end) {
+            for tide in await dayTable(station: stationId, utcDay: utcDay) {
+                guard let at = Self.instant(of: tide.time, onUTCDay: utcDay) else { continue }
+                stamped.append((at, tide))
             }
-            do {
-                let (data, _) = try await URLSession.shared.data(from: comps.url!)
-                let resp = try JSONDecoder().decode(IHMResponse.self, from: data)
-                var tideList = resp.mareas?.datos?.marea ?? []
-                if tideList.isEmpty, let single = resp.mareas?.datos?.mareaOne {
-                    tideList = [single]
-                }
-                let tides = tideList.map {
-                    Tide(time: $0.hora ?? "—", height: Double($0.altura ?? "0") ?? 0, type: $0.tipo ?? "")
-                }
-                // Only cache a real answer — an empty day may just be IHM having a bad moment.
-                if !tides.isEmpty { TidesDiskCache.save(tides, station: stationId, day: dateStr) }
-                days.append(TideDayResult(date: isoDate.string(from: d), tides: tides))
-            } catch {
-                days.append(TideDayResult(date: isoDate.string(from: d), tides: []))
-            }
+        }
+
+        let hhmm = DateFormatter()
+        hhmm.locale = Locale(identifier: "en_US_POSIX")
+        hhmm.dateFormat = "HH:mm"
+        hhmm.timeZone = zone
+        let isoDate = ISO8601DateFormatter()
+        isoDate.formatOptions = [.withFullDate]
+        isoDate.timeZone = zone   // label the day in port time too
+
+        let days = [day0, day1].map { start -> TideDayResult in
+            let next = cal.date(byAdding: .day, value: 1, to: start)!
+            let tides = stamped
+                .filter { $0.at >= start && $0.at < next }
+                .sorted { $0.at < $1.at }
+                .map { Tide(time: hhmm.string(from: $0.at), height: $0.tide.height, type: $0.tide.type) }
+            return TideDayResult(date: isoDate.string(from: start), tides: tides)
         }
         return TidesDayPair(station: stationName, days: days)
     }
+
+    /// One UTC day's table, straight from IHM (times still in UTC, as published).
+    /// A published day never changes, so a cache hit is final: no network call, and the
+    /// card paints on the first frame.
+    private func dayTable(station: String, utcDay: Date) async -> [Tide] {
+        let dateStr = Self.utcDayFmt.string(from: utcDay)
+        if let cached = TidesDiskCache.load(station: station, day: dateStr) { return cached }
+
+        var comps = URLComponents(string: base)!
+        comps.queryItems = [
+            URLQueryItem(name: "request", value: "gettide"),
+            URLQueryItem(name: "id",      value: station),
+            URLQueryItem(name: "format",  value: "json"),
+            URLQueryItem(name: "date",    value: dateStr),
+        ]
+        do {
+            let (data, _) = try await URLSession.shared.data(from: comps.url!)
+            let resp = try JSONDecoder().decode(IHMResponse.self, from: data)
+            var tideList = resp.mareas?.datos?.marea ?? []
+            if tideList.isEmpty, let single = resp.mareas?.datos?.mareaOne {
+                tideList = [single]
+            }
+            let tides = tideList.map {
+                Tide(time: $0.hora ?? "—", height: Double($0.altura ?? "0") ?? 0, type: $0.tipo ?? "")
+            }
+            // Only cache a real answer — an empty day may just be IHM having a bad moment.
+            if !tides.isEmpty { TidesDiskCache.save(tides, station: station, day: dateStr) }
+            return tides
+        } catch {
+            return []
+        }
+    }
+
+    /// UTC midnights of every table needed to cover the local window `[from, to)`.
+    private static func utcDays(from: Date, to: Date) -> [Date] {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        var day = cal.startOfDay(for: from)
+        var out: [Date] = []
+        while day < to {
+            out.append(day)
+            day = cal.date(byAdding: .day, value: 1, to: day)!
+        }
+        return out
+    }
+
+    /// "HH:mm" read as UTC on `utcDay`. UTC has no DST, so plain arithmetic is exact.
+    private static func instant(of hhmm: String, onUTCDay utcDay: Date) -> Date? {
+        let parts = hhmm.split(separator: ":")
+        guard parts.count == 2, let h = Int(parts[0]), let m = Int(parts[1]) else { return nil }
+        return utcDay.addingTimeInterval(Double(h) * 3600 + Double(m) * 60)
+    }
+
+    private static let utcDayFmt: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyyMMdd"
+        f.timeZone = TimeZone(identifier: "UTC")
+        return f
+    }()
 }
 
 // MARK: - Disk cache

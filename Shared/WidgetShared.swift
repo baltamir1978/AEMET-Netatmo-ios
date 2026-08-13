@@ -68,7 +68,7 @@ struct SavedLocation: Codable, Identifiable, Equatable {
     /// Province first (an AEMET code is an INE code, and 35/38 *are* the Canaries — no
     /// guessing), coordinate only as the fallback for entries that carry no municipio,
     /// like a GPS fix resolved without an AEMET key.
-    static func timeZoneIdentifier(code: String, lat: Double, lon: Double) -> String {
+    nonisolated static func timeZoneIdentifier(code: String, lat: Double, lon: Double) -> String {
         if code.hasPrefix("35") || code.hasPrefix("38") { return "Atlantic/Canary" }
         if isCanaries(lat: lat, lon: lon) { return "Atlantic/Canary" }
         return "Europe/Madrid"
@@ -77,7 +77,7 @@ struct SavedLocation: Codable, Identifiable, Equatable {
     /// Bounding box of the archipelago, from El Hierro to Lanzarote, with a small margin.
     /// Madeira (32.6°N) and the Azores (west of 25°W) fall outside it on purpose — those
     /// are IPMA's and get their zone from the catalogue.
-    private static func isCanaries(lat: Double, lon: Double) -> Bool {
+    nonisolated private static func isCanaries(lat: Double, lon: Double) -> Bool {
         (27.3...29.6).contains(lat) && (-18.4 ... -13.2).contains(lon)
     }
 }
