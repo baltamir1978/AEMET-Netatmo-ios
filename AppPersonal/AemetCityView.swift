@@ -166,7 +166,7 @@ struct AemetCityView: View {
                 if let w = windKmh {
                     heroStat("💨", "\(w) km/h", (gustKmh.map { $0 > 0 ? String(localized: "racha \($0)") : "Viento" }) ?? "Viento")
                 }
-                if let rain = rain1h, rain > 0 { heroStat("🌧", "\(rain) L/m²", "Lluvia 1h") }
+                if let rain = rain1h, rain > 0 { heroStat("🌧", "\(Self.rain(rain)) L/m²", "Lluvia 1h") }
             }
         }
         .frame(maxWidth: .infinity).padding(16)
@@ -292,6 +292,35 @@ struct AemetCityView: View {
     private static func parseObsDate(_ s: String) -> Date? {
         obsUTCFormatter.date(from: s) ?? ISO8601DateFormatter().date(from: s)
     }
+
+    /// Rain and pressure arrive as raw `Double`s and were interpolated straight into the
+    /// string, so a value AEMET means as 0,2 could print as "0.20000000000000001" — binary
+    /// floating point spelled out in full. These format the number instead: one decimal
+    /// for rain (0,2 L/m² is a real reading), and the local decimal separator in both.
+    private static func rain(_ v: Double) -> String {
+        rainFormatter.string(from: NSNumber(value: v)) ?? String(format: "%.1f", v)
+    }
+    private static func pressure(_ v: Double) -> String {
+        pressureFormatter.string(from: NSNumber(value: v)) ?? String(format: "%.1f", v)
+    }
+
+    /// Built once: NumberFormatter is expensive and this card redraws on every refresh.
+    private static let rainFormatter: NumberFormatter = {
+        let f = NumberFormatter()
+        f.numberStyle = .decimal
+        f.locale = .autoupdatingCurrent
+        f.minimumFractionDigits = 1
+        f.maximumFractionDigits = 1
+        return f
+    }()
+    private static let pressureFormatter: NumberFormatter = {
+        let f = NumberFormatter()
+        f.numberStyle = .decimal
+        f.locale = .autoupdatingCurrent
+        f.usesGroupingSeparator = false
+        f.maximumFractionDigits = 1
+        return f
+    }()
 
     /// Right-column readout in the hero card: emoji + value over a faint caption.
     private func heroStat(_ icon: String, _ value: String, _ label: String) -> some View {
@@ -645,13 +674,13 @@ struct AemetCityView: View {
                 // Per-field lookups so a sensor missing from the newest record still shows
                 // its last reported value instead of dropping the whole row.
                 if let hr = latestObs(\.hr) { detailRow("Humedad", value: "\(Int(hr))%") }
-                if let pres = latestObs(\.pres) { detailRow("Presión", value: "\(pres) hPa") }
+                if let pres = latestObs(\.pres) { detailRow("Presión", value: "\(Self.pressure(pres)) hPa") }
                 if let vv = latestObs(\.vv) { detailRow("Viento", value: String(format: "%d km/h", Int(vv * 3.6))) }
                 if let vmax = latestObs(\.vmax), vmax > 0 {
                     detailRow("Racha máxima", value: String(format: "%d km/h", Int(vmax * 3.6)))
                 }
                 if let prec = latestObs(\.prec), prec > 0 {
-                    detailRow("Precipitación (1h)", value: "\(prec) L/m²")
+                    detailRow("Precipitación (1h)", value: "\(Self.rain(prec)) L/m²")
                 }
             }
             .background(.background)
