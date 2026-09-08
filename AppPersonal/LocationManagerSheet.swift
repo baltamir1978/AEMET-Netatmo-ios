@@ -3,12 +3,15 @@ import SwiftUI
 /// Manage the followed locations: select, search, add and remove.
 struct LocationManagerSheet: View {
     @ObservedObject private var store = LocationStore.shared
+    @ObservedObject private var search = LocationSearch.shared
     @Environment(\.dismiss) private var dismiss
 
     @State private var searchText = ""
-    @State private var results: [AemetMunicipio] = []
-    @State private var cached: [AemetMunicipio] = []
-    @State private var debounce: Task<Void, Never>? = nil
+
+    /// Calculado, no guardado: el índice responde en memoria, así que buscar cuesta menos
+    /// que arrastrar el resultado en `@State` — y en cuanto el catálogo termina de cargar,
+    /// la vista se recalcula sola con la búsqueda ya hecha.
+    private var results: [LocationSuggestion] { search.search(searchText) }
 
     /// Called after the selection changes so the AEMET view can reload.
     let onChange: () -> Void
@@ -19,21 +22,23 @@ struct LocationManagerSheet: View {
                 Section("Buscar y añadir") {
                     TextField("Municipio…", text: $searchText)
                         .autocorrectionDisabled()
-                        .onChange(of: searchText) { _, newVal in
-                            debounce?.cancel()
-                            if newVal.count < 2 { results = []; return }
-                            debounce = Task {
-                                try? await Task.sleep(for: .milliseconds(300))
-                                guard !Task.isCancelled else { return }
-                                await search(newVal)
-                            }
+                    if results.isEmpty, !searchText.isEmpty, search.isLoading {
+                        HStack(spacing: 8) {
+                            ProgressView()
+                            Text("Cargando el listado de municipios…")
+                                .font(.caption).foregroundStyle(.secondary)
                         }
+                        .accessibilityElement(children: .combine)
+                    }
                     ForEach(results) { r in
                         Button { add(r) } label: {
                             HStack {
-                                Text(r.nombre).foregroundStyle(.primary)
+                                Text(r.name).foregroundStyle(.primary)
+                                if let m = r.municipality {
+                                    Text(m).font(.caption).foregroundStyle(.secondary)
+                                }
                                 Spacer()
-                                if store.locations.contains(where: { $0.code == r.codMunicipio }) {
+                                if store.locations.contains(where: { $0.code == r.code }) {
                                     Image(systemName: "checkmark").foregroundStyle(.secondary)
                                 } else {
                                     Image(systemName: "plus.circle.fill").foregroundStyle(AppTheme.green)
@@ -71,6 +76,7 @@ struct LocationManagerSheet: View {
                     }
                 }
             }
+            .task { search.prepare() }
             .navigationTitle("Ubicaciones")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -81,23 +87,9 @@ struct LocationManagerSheet: View {
         }
     }
 
-    private func add(_ m: AemetMunicipio) {
+    private func add(_ m: LocationSuggestion) {
         store.add(store.makeLocation(from: m))
         onChange()
         searchText = ""
-        results = []
-    }
-
-    private func search(_ query: String) async {
-        if cached.isEmpty {
-            cached = (try? await AEMETService.shared.allMunicipios()) ?? []
-        }
-        let q = query.lowercased().folding(options: .diacriticInsensitive, locale: .current)
-        results = Array(
-            (cached
-                .filter { $0.nombre.lowercased().folding(options: .diacriticInsensitive, locale: .current).contains(q) }
-             + IPMA.searchAsMunicipios(query))
-                .prefix(15)
-        )
     }
 }

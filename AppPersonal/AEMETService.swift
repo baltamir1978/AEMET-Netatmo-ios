@@ -122,10 +122,38 @@ struct AEMETService {
 
     // MARK: - Municipality catalog
 
-    func allMunicipios() async throws -> [AemetMunicipio] {
-        let url = "\(base)/maestro/municipios"
-        let dataURL = try await fetchDataURL(url)
-        return try await fetchJSON(dataURL)
+    /// The full municipality catalog (~8.100 entries), disk-cached like every other
+    /// endpoint. It arrives through the two-step pattern *behind the throttle*, so a
+    /// live fetch costs several seconds — far too slow to sit in front of a search box.
+    /// The INE only changes this list when a municipality is created or merged, so
+    /// callers pass a `maxAge` of weeks and the network is hit about once a month.
+    func allMunicipios(maxAge: TimeInterval? = nil) async throws -> [AemetMunicipio] {
+        let key = "maestro_municipios"
+        let cached = AemetDiskCache.load(key)
+        if let maxAge, let c = cached, c.age < maxAge,
+           let list = try? JSONDecoder().decode([AemetMunicipio].self, from: c.data) {
+            return list
+        }
+        do {
+            let dataURL = try await fetchDataURL("\(base)/maestro/municipios")
+            let raw = try await fetchRaw(dataURL)
+            let list = try JSONDecoder().decode([AemetMunicipio].self, from: raw)
+            AemetDiskCache.save(key, data: raw)
+            return list
+        } catch {
+            if let c = cached,
+               let list = try? JSONDecoder().decode([AemetMunicipio].self, from: c.data) { return list }
+            throw error
+        }
+    }
+
+    /// The catalog as it sits on disk, with its age — no await, no network, so the
+    /// search box can answer the very first keystroke.
+    func cachedMunicipios() -> (list: [AemetMunicipio], age: TimeInterval)? {
+        guard let c = AemetDiskCache.load("maestro_municipios"),
+              let list = try? JSONDecoder().decode([AemetMunicipio].self, from: c.data)
+        else { return nil }
+        return (list, c.age)
     }
 
     func allStations() async throws -> [AemetStation] {

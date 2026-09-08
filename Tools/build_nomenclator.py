@@ -13,7 +13,8 @@ Uso:
     python3 Tools/build_nomenclator.py [ES.txt]
 
 Sin argumento se descarga el dump. Salida: AppPersonal/Nucleos.tsv, ordenado por
-latitud (Nomenclator.swift acota por bandas de latitud antes de medir).
+latitud (Nomenclator.swift acota por bandas de latitud antes de medir), con
+columnas: latitud, longitud, código INE del municipio, población, nombre.
 """
 
 import io
@@ -31,7 +32,7 @@ DUMP_URL = "https://download.geonames.org/export/dump/ES.zip"
 KEEP = {"PPL", "PPLA", "PPLA2", "PPLA3", "PPLA4", "PPLC", "PPLL"}
 
 # Columnas del dump (geonames readme.txt)
-NAME, LAT, LON, FCLASS, FCODE, ADMIN3 = 1, 4, 5, 6, 7, 12
+NAME, LAT, LON, FCLASS, FCODE, ADMIN3, POP = 1, 4, 5, 6, 7, 12, 14
 
 
 def load_dump(path=None):
@@ -63,9 +64,15 @@ def build(rows):
             ine = ""
         if not name or "\t" in name:
             continue
+        # La población desempata los homónimos en el buscador: hay treinta y tantas
+        # "La Granja" en España, y quien la escribe busca casi siempre la grande.
+        try:
+            pop = int(f[POP])
+        except ValueError:
+            pop = 0
         # 4 decimales ≈ 11 m: de sobra para elegir el núcleo más cercano, y recorta
         # un tercio del fichero frente a la precisión completa del dump.
-        out.append((float(f[LAT]), float(f[LON]), ine, name))
+        out.append((float(f[LAT]), float(f[LON]), ine, pop, name))
     out.sort(key=lambda r: r[0])
     return out
 
@@ -81,8 +88,8 @@ def main():
     # el megabyte del nomenclátor.
     dest = os.path.join(root, "AppPersonal", "Nucleos.tsv")
     with open(dest, "w", encoding="utf-8") as fh:
-        for lat, lon, ine, name in rows:
-            fh.write(f"{lat:.4f}\t{lon:.4f}\t{ine}\t{name}\n")
+        for lat, lon, ine, pop, name in rows:
+            fh.write(f"{lat:.4f}\t{lon:.4f}\t{ine}\t{pop}\t{name}\n")
     size = os.path.getsize(dest)
     print(f"{len(rows)} núcleos → {dest} ({size / 1024:.0f} KB)")
 

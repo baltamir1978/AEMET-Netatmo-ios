@@ -50,6 +50,7 @@ Cuatro widgets en tamaños pequeño, mediano y grande (`AppPersonalWidget`):
 ### General
 
 - 📍 **El pueblo, no el municipio** (`Nomenclator.swift`): el geocodificador de Apple sólo llega al municipio — en todo el concejo de Llanes devuelve «Llanes», y Posada, Niembro o Barro salen con el mismo nombre. La app lleva embarcado un nomenclátor de ~29.000 núcleos de población (`Nucleos.tsv`, generado por `Tools/build_nomenclator.py`) y busca el más cercano, anclado por código INE al municipio que ya resolvió AEMET. En las ciudades grandes manda MapKit, que sí conoce los distritos (Chamberí, Gràcia, Triana).
+- 🔎 **Buscador instantáneo** (`LocationSearch.swift`): un índice en memoria con los municipios de AEMET, las localidades del IPMA y los pueblos del nomenclátor, con los nombres ya normalizados. Busca desde la primera letra y sin red — se puede escribir «Niembro» y no sólo «Llanes» —, ordenando primero lo que empieza por lo escrito, el municipio antes que sus pueblos y el más poblado entre homónimos. El maestro de AEMET se cachea un mes en disco: antes se pedía por red en la primera tecla y la lista tardaba más de cinco segundos en salir.
 - 🔄 **Refresco en segundo plano** con `BGAppRefreshTask` e intervalo configurable (`BackgroundRefresher`).
 - 🌗 **Modo claro y oscuro** con tintes adaptativos (`Theme.swift`, `WidgetTheme.swift`).
 - 🗣️ **Localizada** en español (idioma base), inglés, gallego, euskera y catalán (`Localizable.xcstrings`).
@@ -110,6 +111,7 @@ AppPersonal/
 │   ├── LocationStore.swift / CurrentLocationService.swift
 │   ├── Nomenclator.swift           # Núcleos de población (pueblos y aldeas)
 │   ├── Nucleos.tsv                 # Nomenclátor embebido (GeoNames, CC BY 4.0)
+│   ├── LocationSearch.swift        # Índice del buscador de localidades
 │   ├── BackgroundRefresher.swift   # BGAppRefreshTask
 │   ├── AppConfiguration.swift      # Configuración (UserDefaults)
 │   ├── Theme.swift / Models.swift

@@ -1018,6 +1018,34 @@
         }
       }
     },
+    "Cargando el listado de municipios…" : {
+      "localizations" : {
+        "ca" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Carregant la llista de municipis…"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loading the list of towns…"
+          }
+        },
+        "eu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Udalerrien zerrenda kargatzen…"
+          }
+        },
+        "gl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cargando a listaxe de concellos…"
+          }
+        }
+      }
+    },
     "Calidad aire" : {
       "extractionState" : "stale",
       "localizations" : {

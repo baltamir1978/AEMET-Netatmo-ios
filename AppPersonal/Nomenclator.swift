@@ -11,7 +11,8 @@ import CoreLocation
 /// estás en un pueblo a 12 km de la capital se lee como un error de la app.
 ///
 /// Los datos salen de `Tools/build_nomenclator.py` (GeoNames, CC BY 4.0) a
-/// `Nucleos.tsv`, ordenado por latitud.
+/// `Nucleos.tsv`, ordenado por latitud: latitud, longitud, código INE, población y
+/// nombre.
 /// `nonisolated` a propósito: cargar y parsear el fichero cuesta decenas de ms, y con
 /// el aislamiento por defecto del proyecto (MainActor) eso se pagaría bloqueando la UI.
 /// Así el llamante puede resolverlo en una tarea de fondo.
@@ -22,6 +23,9 @@ nonisolated enum Nomenclator {
         /// Código INE del municipio, el mismo con el que AEMET indexa su catálogo.
         /// Vacío en el ~1% de entradas que el dump no trae ancladas.
         let ine: String
+        /// Habitantes según GeoNames, 0 cuando el dump no los da. Sólo se usa para
+        /// desempatar homónimos en el buscador (hay treinta y tantas "La Granja").
+        let population: Int
     }
 
     /// Radio máximo para aceptar un núcleo. Un pueblo es un punto, no un polígono: el
@@ -41,13 +45,19 @@ nonisolated enum Nomenclator {
         out.reserveCapacity(30_000)
         for line in text.split(separator: "\n", omittingEmptySubsequences: true) {
             let f = line.split(separator: "\t", omittingEmptySubsequences: false)
-            guard f.count == 4, let lat = Double(f[0]), let lon = Double(f[1]) else { continue }
-            out.append(Nucleo(name: String(f[3]),
+            guard f.count == 5, let lat = Double(f[0]), let lon = Double(f[1]) else { continue }
+            out.append(Nucleo(name: String(f[4]),
                               coord: CLLocationCoordinate2D(latitude: lat, longitude: lon),
-                              ine: String(f[2])))
+                              ine: String(f[2]),
+                              population: Int(f[3]) ?? 0))
         }
         return out
     }
+
+    /// Los núcleos que se pueden buscar por nombre: los que traen municipio, porque el
+    /// código INE es lo que luego pide la previsión. El ~1% que el dump no trae anclado
+    /// serviría para nombrar un sitio, pero no para pedirle el tiempo.
+    static var searchable: [Nucleo] { all.filter { !$0.ine.isEmpty } }
 
     /// El núcleo habitado más cercano a `coord`, o nil si no hay ninguno a tiro.
     ///

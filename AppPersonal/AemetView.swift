@@ -9,12 +9,9 @@ import CoreLocation
 /// straight away, instead of the previous city's numbers under the new city's name.
 struct AemetView: View {
     @ObservedObject private var store = LocationStore.shared
+    @ObservedObject private var search = LocationSearch.shared
     @State private var showManage = false
     @State private var searchText = ""
-    @State private var searchResults: [AemetMunicipio] = []
-    @State private var cachedMunicipios: [AemetMunicipio] = []
-    @State private var showSearch = false
-    @State private var searchDebounce: Task<Void, Never>? = nil
     /// Weather per page, keyed by the *picker* code — so the GPS entry (`__current__`)
     /// keeps its own copy even when it resolves to a town that is also followed.
     @State private var cities: [String: CityWeather] = [:]
@@ -119,6 +116,10 @@ struct AemetView: View {
             .task {
                 await loadForecast()
                 primeNeighbours()
+                // Con la pantalla ya pintada, deja el catálogo de municipios listo (una
+                // petición al mes, ver `LocationSearch`) para que buscar sea instantáneo
+                // incluso la primera vez.
+                search.prepare()
             }
             .sheet(isPresented: $showManage) {
                 LocationManagerSheet { Task { await loadForecast() } }
@@ -196,22 +197,31 @@ struct AemetView: View {
             TextField("Buscar municipio…", text: $searchText)
                 .textFieldStyle(.roundedBorder)
                 .onChange(of: searchText) { _, newVal in
-                    if newVal.count < 2 { searchResults = []; showSearch = false; return }
-                    searchDebounce?.cancel()
-                    searchDebounce = Task {
-                        try? await Task.sleep(for: .milliseconds(300))
-                        guard !Task.isCancelled else { return }
-                        await performSearch(newVal)
-                    }
+                    // Basta con escribir para que haya catálogo: la primera letra ya
+                    // busca, y si aún se está cargando, precalentarlo aquí.
+                    if !newVal.isEmpty { search.prepare() }
                 }
-            if showSearch {
+            if !searchResults.isEmpty || showsCatalogLoading {
                 VStack(spacing: 0) {
+                    if showsCatalogLoading {
+                        HStack(spacing: 8) {
+                            ProgressView()
+                            Text("Cargando el listado de municipios…")
+                                .font(.caption).foregroundStyle(.secondary)
+                            Spacer()
+                        }
+                        .padding(.horizontal, 14).padding(.vertical, 10)
+                        .accessibilityElement(children: .combine)
+                    }
                     ForEach(searchResults) { result in
                         Button {
                             addLocation(result)
                         } label: {
                             HStack {
-                                Text(result.nombre).fontWeight(.semibold).foregroundStyle(.primary)
+                                Text(result.name).fontWeight(.semibold).foregroundStyle(.primary)
+                                if let m = result.municipality {
+                                    Text(m).font(.caption).foregroundStyle(.secondary)
+                                }
                                 Spacer()
                                 Image(systemName: "plus.circle.fill").foregroundStyle(AppTheme.green)
                             }
@@ -230,26 +240,20 @@ struct AemetView: View {
     // MARK: - Search
 
     /// Add a searched municipio to the followed list and select it.
-    private func addLocation(_ m: AemetMunicipio) {
+    private func addLocation(_ m: LocationSuggestion) {
         store.add(store.makeLocation(from: m))
         searchText = ""
-        searchResults = []
-        showSearch = false
         Task { await loadForecast() }
     }
 
-    private func performSearch(_ query: String) async {
-        if cachedMunicipios.isEmpty {
-            cachedMunicipios = (try? await AEMETService.shared.allMunicipios()) ?? []
-        }
-        let q = query.lowercased().folding(options: .diacriticInsensitive, locale: .current)
-        searchResults = Array(
-            (cachedMunicipios
-                .filter { $0.nombre.lowercased().folding(options: .diacriticInsensitive, locale: .current).contains(q) }
-             + IPMA.searchAsMunicipios(query))
-                .prefix(10)
-        )
-        showSearch = !searchResults.isEmpty
+    /// Resultados de lo escrito. Calculado sobre el índice en memoria (ver
+    /// `LocationSearch`), que responde en la misma pulsación de tecla.
+    private var searchResults: [LocationSuggestion] { search.search(searchText, limit: 10) }
+
+    /// Se escribió algo pero el catálogo aún viene de camino: mejor decirlo que dejar la
+    /// caja muda (sólo pasa la primera vez, o un mes después).
+    private var showsCatalogLoading: Bool {
+        !searchText.isEmpty && searchResults.isEmpty && search.isLoading
     }
 
     // MARK: - Per-page state

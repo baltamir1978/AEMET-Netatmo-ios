@@ -128,7 +128,11 @@ final class LocationStore: ObservableObject {
         // you stood in Elvas. Hand the fix to IPMA instead.
         if let place = await resolvePortugueseCurrent(coord) { return place }
         if maestro.isEmpty {
-            maestro = (try? await AEMETService.shared.allMunicipios()) ?? []
+            // Un mes de caché en disco: el catálogo sólo cambia cuando el INE crea o
+            // fusiona un municipio, y traerlo por red cuesta segundos (dos peticiones
+            // encadenadas detrás del throttle). Es el mismo fichero que alimenta el
+            // buscador — ver `LocationSearch`.
+            maestro = (try? await AEMETService.shared.allMunicipios(maxAge: 30 * 24 * 60 * 60)) ?? []
         }
         // El Goloso is a *district* of Madrid, not a municipio — its nearest municipio
         // *centroid* is Alcobendas (Madrid's centroid sits ~15 km south, downtown).
@@ -574,6 +578,17 @@ final class LocationStore: ObservableObject {
     /// Build the followed location for a search result. A Portuguese entry (`pt-` code)
     /// gets Lisbon time and its source label up front; a Spanish one resolves its
     /// observation station later, on the first load.
+    /// Igual, pero desde una fila del buscador: un pueblo del nomenclátor se sigue con el
+    /// código de *su municipio* (es quien tiene previsión) y las coordenadas del pueblo,
+    /// que son las que mandan en sol, mareas y estación. Es lo mismo que hace la
+    /// ubicación por GPS al decir "Posada de Llanes" en vez de "Llanes".
+    func makeLocation(from s: LocationSuggestion) -> SavedLocation {
+        var loc = makeLocation(from: AemetMunicipio(codMunicipio: s.code, nombre: s.name,
+                                                    lat: s.lat, lon: s.lon))
+        loc.province = s.municipality
+        return loc
+    }
+
     func makeLocation(from m: AemetMunicipio) -> SavedLocation {
         var loc = SavedLocation(code: m.codMunicipio, name: m.nombre, province: nil,
                                 lat: m.lat ?? selected.lat, lon: m.lon ?? selected.lon,

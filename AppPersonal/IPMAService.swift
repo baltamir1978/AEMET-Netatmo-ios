@@ -59,28 +59,6 @@ enum IPMA {
         return locations.first { $0.globalId == id }
     }
 
-    /// Catalogue matches for a search box query (accent/case-insensitive). Folds here
-    /// rather than through `LocationStore`, which the widget extension doesn't build.
-    static func search(_ query: String) -> [IPMALocation] {
-        let q = fold(query)
-        guard q.count >= 2 else { return [] }
-        return locations.filter { fold($0.name).contains(q) }
-    }
-
-    private static func fold(_ s: String) -> String {
-        s.folding(options: .diacriticInsensitive, locale: .current)
-            .lowercased()
-            .trimmingCharacters(in: .whitespaces)
-    }
-
-    /// Catalogue matches shaped as `AemetMunicipio`, so the search boxes and the "add a
-    /// place" path treat a Portuguese city exactly like a Spanish one.
-    static func searchAsMunicipios(_ query: String) -> [AemetMunicipio] {
-        search(query).map {
-            AemetMunicipio(codMunicipio: $0.code, nombre: $0.name, lat: $0.lat, lon: $0.lon)
-        }
-    }
-
     /// The catalogue location nearest to a coordinate, and how far away it is in km.
     /// Used to resolve a GPS fix taken in Portugal onto the closest IPMA forecast.
     static func nearest(to lat: Double, _ lon: Double) -> (location: IPMALocation, km: Double)? {
