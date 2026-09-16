@@ -1,4 +1,5 @@
 import SwiftUI
+import WidgetKit
 
 /// Compact mirror of the app's `AppTheme` green palette, local to the widget target.
 enum WidgetTheme {
@@ -15,59 +16,156 @@ enum WidgetTheme {
 
 /// Temperature → colour, for the "colour by temperature" widget background.
 ///
-/// Anchored on how the temperature *feels* rather than on an even split: freezing is deep
-/// blue, the comfortable teens are green, and it warms through gold and orange into a deep
-/// blood red at the 40-45° end (red keeps deepening rather than veering to violet — the heat
-/// reading "off the scale" without changing hue family). Colours are deliberately dark: the
-/// widget draws white text on top and must stay legible.
+/// Built in bands rather than as one long blend: deep blues through turquoise and green for
+/// the cold side, a light sky blue for the pleasant 20–26°, and gold → orange → blood red for
+/// the heat. Inside a band stops are blended in OKLab, which keeps the in-between tones clean;
+/// *between* bands the colour steps at the half degree. The old single blend ran green → lime →
+/// gold in RGB and put a muddy olive-mustard right on 21–24°, the most common readings of the
+/// year.
 enum TempPalette {
-    // 15 stops (was 8): the extra ones smooth the transitions and, crucially, add a
-    // green-lime bridge at 21° that kills the olive mud the old green→gold jump produced.
-    // Saturated on purpose through the mid-range, where the temperature spends most of the year.
-    private static let stops: [(t: Double, c: (r: Double, g: Double, b: Double))] = [
+    private typealias RGB = (r: Double, g: Double, b: Double)
+
+    private static let stops: [(t: Double, c: RGB)] = [
         (-10, (0.10, 0.14, 0.40)),   // hielo — azul noche
         ( -5, (0.11, 0.24, 0.60)),   // muy frío — azul
         (  0, (0.12, 0.34, 0.80)),   // cero — azul intenso
         (  5, (0.10, 0.48, 0.78)),   // frío — azul-turquesa
         ( 10, (0.08, 0.60, 0.75)),   // fresco — turquesa
         ( 14, (0.10, 0.64, 0.60)),   // suave — verde-turquesa
-        ( 18, (0.14, 0.68, 0.46)),   // templado — verde (la casa)
-        ( 21, (0.58, 0.74, 0.22)),   // cálido — verde-lima (puente, sin oliva)
-        ( 24, (0.92, 0.74, 0.12)),   // cálido — dorado
-        ( 27, (0.97, 0.58, 0.10)),   // caluroso — ámbar
-        ( 30, (0.98, 0.44, 0.10)),   // calor — naranja
-        ( 34, (0.94, 0.26, 0.12)),   // mucho calor — naranja-rojo
-        ( 38, (0.88, 0.14, 0.16)),   // sofocante — rojo
-        ( 42, (0.72, 0.08, 0.12)),   // extremo — rojo profundo
+        ( 18, (0.14, 0.68, 0.46)),   // templado — verde
+        ( 20, (0.525, 0.776, 0.933)), // agradable — azul clarito  #86C6EE
+        ( 23, (0.612, 0.824, 0.957)), //                          #9CD2F4
+        ( 26, (0.702, 0.867, 0.973)), //                          #B3DDF8
+        ( 27, (0.96, 0.76, 0.20)),   // caluroso — dorado
+        ( 30, (0.98, 0.52, 0.10)),   // calor — naranja
+        ( 34, (0.94, 0.30, 0.12)),   // mucho calor — naranja-rojo
+        ( 38, (0.86, 0.14, 0.16)),   // sofocante — rojo
+        ( 42, (0.70, 0.07, 0.12)),   // extremo — rojo profundo
         ( 45, (0.54, 0.04, 0.10)),   // extremo — rojo sangre
     ]
 
-    /// Linear interpolation between the two surrounding stops; clamps outside the range.
-    static func color(for temp: Double) -> Color {
-        guard let first = stops.first, let last = stops.last else { return .gray }
-        if temp <= first.t { return Color(red: first.c.r, green: first.c.g, blue: first.c.b) }
-        if temp >= last.t  { return Color(red: last.c.r,  green: last.c.g,  blue: last.c.b) }
+    /// Stops after which the next band starts: no blend, a step at the half degree.
+    private static let bandEnds: Set<Double> = [26]
+
+    /// Text colour for the light end of the scale (white doesn't read on the 20–26° blues or
+    /// on the golds and oranges).
+    static let darkInk = Color(red: 0x0B / 255, green: 0x22 / 255, blue: 0x36 / 255)
+    private static let darkInkRGB: RGB = (0x0B / 255, 0x22 / 255, 0x36 / 255)
+
+    static func color(for temp: Double) -> Color { color(rgb(for: temp)) }
+
+    /// Background gradient for a reading: the temperature's colour on top, the same hue a step
+    /// darker at the bottom. Darkening by mixing in black is what turned the warm colours to
+    /// mud, and would grey the light blues. Falls back to the app's green with no reading.
+    static func gradient(for temp: Double?) -> LinearGradient {
+        guard let temp else { return WidgetTheme.heroGradient }
+        let top = rgb(for: temp)
+        return LinearGradient(colors: [color(top), color(bottom(of: top))],
+                              startPoint: .top, endPoint: .bottom)
+    }
+
+    /// Whether the widget's text should switch to `darkInk` on this reading's background:
+    /// whichever of white and dark ink keeps more contrast at the worse end of the gradient.
+    static func prefersDarkInk(for temp: Double?) -> Bool {
+        guard let temp else { return false }
+        let top = rgb(for: temp), bot = bottom(of: top)
+        let white: RGB = (1, 1, 1)
+        let onWhite = min(contrast(white, top), contrast(white, bot))
+        let onDark = min(contrast(darkInkRGB, top), contrast(darkInkRGB, bot))
+        return onDark > onWhite
+    }
+
+    // MARK: Colour maths
+
+    private static func rgb(for temp: Double) -> RGB {
+        guard let first = stops.first, let last = stops.last else { return (0.5, 0.5, 0.5) }
+        if temp <= first.t { return first.c }
+        if temp >= last.t { return last.c }
         for i in 0..<(stops.count - 1) {
             let a = stops[i], b = stops[i + 1]
             guard temp >= a.t, temp <= b.t else { continue }
+            if bandEnds.contains(a.t) { return temp < (a.t + b.t) / 2 ? a.c : b.c }
             let f = (temp - a.t) / (b.t - a.t)
-            return Color(red:   a.c.r + (b.c.r - a.c.r) * f,
-                         green: a.c.g + (b.c.g - a.c.g) * f,
-                         blue:  a.c.b + (b.c.b - a.c.b) * f)
+            let la = oklab(a.c), lb = oklab(b.c)
+            return srgb((la.0 + (lb.0 - la.0) * f, la.1 + (lb.1 - la.1) * f, la.2 + (lb.2 - la.2) * f))
         }
-        return .gray
+        return last.c
     }
 
-    /// Background gradient for a reading: the temperature's colour, lit from the top.
-    /// Falls back to the app's green when there's no reading at all.
-    static func gradient(for temp: Double?) -> LinearGradient {
-        guard let temp else { return WidgetTheme.heroGradient }
-        let base = color(for: temp)
-        // Keep the top at full strength and only deepen the bottom: darkening both ends
-        // was what turned the warm colours to mud.
-        return LinearGradient(colors: [base, base.mix(with: .black, by: 0.30)],
-                              startPoint: .top, endPoint: .bottom)
+    private static func bottom(of c: RGB) -> RGB {
+        let lab = oklab(c)
+        return srgb((max(0, lab.0 - 0.10), lab.1, lab.2))
     }
+
+    private static func color(_ c: RGB) -> Color { Color(red: c.r, green: c.g, blue: c.b) }
+
+    private static func linear(_ v: Double) -> Double {
+        v <= 0.04045 ? v / 12.92 : pow((v + 0.055) / 1.055, 2.4)
+    }
+
+    private static func gamma(_ v: Double) -> Double {
+        let v = min(1, max(0, v))
+        return v <= 0.0031308 ? 12.92 * v : 1.055 * pow(v, 1 / 2.4) - 0.055
+    }
+
+    private static func oklab(_ c: RGB) -> (Double, Double, Double) {
+        let r = linear(c.r), g = linear(c.g), b = linear(c.b)
+        let l = cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b)
+        let m = cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b)
+        let s = cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b)
+        return (0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s,
+                1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s,
+                0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s)
+    }
+
+    private static func srgb(_ lab: (Double, Double, Double)) -> RGB {
+        let l = pow(lab.0 + 0.3963377774 * lab.1 + 0.2158037573 * lab.2, 3)
+        let m = pow(lab.0 - 0.1055613458 * lab.1 - 0.0638541728 * lab.2, 3)
+        let s = pow(lab.0 - 0.0894841775 * lab.1 - 1.2914855480 * lab.2, 3)
+        return (gamma(4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s),
+                gamma(-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s),
+                gamma(-0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s))
+    }
+
+    private static func contrast(_ a: RGB, _ b: RGB) -> Double {
+        func lum(_ c: RGB) -> Double { 0.2126 * linear(c.r) + 0.7152 * linear(c.g) + 0.0722 * linear(c.b) }
+        let x = lum(a), y = lum(b)
+        return (max(x, y) + 0.05) / (min(x, y) + 0.05)
+    }
+}
+
+/// Foreground colours for whatever the widget is drawn on. White and the bright accents on
+/// the app's green and on dark temperature colours; dark ink and deeper accents on the light
+/// ones. Tinted and clear home screens drop the background, so they always get the white set.
+struct WidgetInk {
+    let dark: Bool
+
+    init(background: TempBackground, temperature: Double?, renderingMode: WidgetRenderingMode) {
+        dark = renderingMode == .fullColor && background == .temperature
+            && TempPalette.prefersDarkInk(for: temperature)
+    }
+
+    var text: Color { dark ? TempPalette.darkInk : .white }
+
+    /// Secondary text at `opacity`. White can afford to fade on a dark ground; dark ink on a
+    /// light one loses legibility much faster, so its text levels fade half as much. Values
+    /// under 0.5 are hairlines (dividers, ring tracks) and are left as they are.
+    func soft(_ opacity: Double) -> Color {
+        guard dark, opacity >= 0.5 else { return text.opacity(opacity) }
+        return text.opacity(1 - (1 - opacity) * 0.5)
+    }
+
+    /// Chance of rain. Deep blue rather than a dark green on light grounds: a green figure
+    /// all but vanishes on the green of 16–18°.
+    var rain: Color { dark ? Color(red: 0.05, green: 0.30, blue: 0.62) : WidgetTheme.greenBright }
+    /// Pressure, good CO₂.
+    var green: Color { dark ? Color(red: 0.03, green: 0.35, blue: 0.26) : WidgetTheme.greenBright }
+    /// Humidity and rain rings.
+    var cool: Color { dark ? Color(red: 0.12, green: 0.34, blue: 0.80) : .cyan }
+    var amber: Color { dark ? Color(red: 0.66, green: 0.36, blue: 0.0) : WidgetTheme.sun }
+    var red: Color { dark ? Color(red: 0.70, green: 0.10, blue: 0.12) : Color(red: 0.95, green: 0.45, blue: 0.40) }
+    /// Min → max temperature bar.
+    var rangeColors: [Color] { [cool, dark ? Color(red: 0.80, green: 0.30, blue: 0.04) : WidgetTheme.sun] }
 }
 
 /// Maps an AEMET sky code (e.g. "11n") to an SF Symbol + tint.

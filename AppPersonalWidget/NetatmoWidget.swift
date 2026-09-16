@@ -49,6 +49,7 @@ private struct SensorRing: View {
     let tint: Color
     let text: String
     let caption: LocalizedStringResource
+    let ink: WidgetInk
     var size: CGFloat = 44
 
     private var fraction: Double {
@@ -59,18 +60,18 @@ private struct SensorRing: View {
     var body: some View {
         VStack(spacing: 3) {
             ZStack {
-                Circle().stroke(.white.opacity(0.22), lineWidth: 4)
+                Circle().stroke(ink.soft(0.22), lineWidth: 4)
                 Circle()
                     .trim(from: 0, to: fraction)
                     .stroke(tint, style: StrokeStyle(lineWidth: 4, lineCap: .round))
                     .rotationEffect(.degrees(-90))
                 Image(systemName: icon)
                     .font(.system(size: size * 0.3))
-                    .foregroundStyle(.white.opacity(0.9))
+                    .foregroundStyle(ink.soft(0.9))
             }
             .frame(width: size, height: size)
-            Text(text).font(.caption2.weight(.semibold)).foregroundStyle(.white)
-            Text(caption).font(.system(size: 9)).foregroundStyle(.white.opacity(0.6))
+            Text(text).font(.caption2.weight(.semibold)).foregroundStyle(ink.text)
+            Text(caption).font(.system(size: 9)).foregroundStyle(ink.soft(0.6))
                 .lineLimit(1).minimumScaleFactor(0.8)
         }
         // One spoken sentence per sensor — VoiceOver would otherwise read the ring, the
@@ -85,6 +86,7 @@ private struct RangeBar: View {
     let min: Double
     let max: Double
     let current: Double?
+    let ink: WidgetInk
 
     private var fraction: Double {
         guard let current, max > min else { return 0.5 }
@@ -93,22 +95,22 @@ private struct RangeBar: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            Text("\(Int(min.rounded()))°").font(.caption2).foregroundStyle(.white.opacity(0.7))
+            Text("\(Int(min.rounded()))°").font(.caption2).foregroundStyle(ink.soft(0.7))
                 .lineLimit(1).fixedSize()
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
                     Capsule()
-                        .fill(LinearGradient(colors: [.cyan, WidgetTheme.sun],
+                        .fill(LinearGradient(colors: ink.rangeColors,
                                              startPoint: .leading, endPoint: .trailing))
                         .frame(height: 4)
-                    Circle().fill(.white)
+                    Circle().fill(ink.text)
                         .frame(width: 8, height: 8)
                         .offset(x: (geo.size.width - 8) * fraction)
                 }
                 .frame(maxHeight: .infinity, alignment: .center)
             }
             .frame(height: 10)
-            Text("\(Int(max.rounded()))°").font(.caption2.weight(.semibold)).foregroundStyle(.white)
+            Text("\(Int(max.rounded()))°").font(.caption2.weight(.semibold)).foregroundStyle(ink.text)
                 .lineLimit(1).fixedSize()
         }
         .accessibilityElement(children: .ignore)
@@ -120,7 +122,14 @@ private struct RangeBar: View {
 
 struct NetatmoWidgetView: View {
     @Environment(\.widgetFamily) private var family
+    @Environment(\.widgetRenderingMode) private var renderingMode
     let entry: NetatmoEntry
+
+    /// White on green and dark temperature colours, dark ink on the light ones.
+    private var ink: WidgetInk {
+        WidgetInk(background: entry.background, temperature: entry.snap?.temperature,
+                  renderingMode: renderingMode)
+    }
 
     var body: some View {
         Group {
@@ -155,10 +164,10 @@ struct NetatmoWidgetView: View {
         VStack(alignment: .leading, spacing: 4) {
             header(s)
             Text(temp(s.temperature))
-                .font(.system(size: 46, weight: .light)).foregroundStyle(.white)
+                .font(.system(size: 46, weight: .light)).foregroundStyle(ink.text)
                 .accessibilityLabel(spokenTemp("Exterior", s.temperature))
             if let mn = s.tempMinOut, let mx = s.tempMaxOut {
-                RangeBar(min: mn, max: mx, current: s.temperature)
+                RangeBar(min: mn, max: mx, current: s.temperature, ink: ink)
             }
             Spacer(minLength: 0)
             HStack(spacing: 10) {
@@ -180,18 +189,18 @@ struct NetatmoWidgetView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     sectionTitle("Exterior")
                     Text(temp(s.temperature))
-                        .font(.system(size: 40, weight: .light)).foregroundStyle(.white)
+                        .font(.system(size: 40, weight: .light)).foregroundStyle(ink.text)
                         .accessibilityLabel(spokenTemp("Exterior", s.temperature))
                     if let mn = s.tempMinOut, let mx = s.tempMaxOut {
-                        RangeBar(min: mn, max: mx, current: s.temperature)
+                        RangeBar(min: mn, max: mx, current: s.temperature, ink: ink)
                     }
                 }
                 if let h = s.humidity { humidityRing(h) }
-                Divider().overlay(.white.opacity(0.25))
+                Divider().overlay(ink.soft(0.25))
                 VStack(alignment: .leading, spacing: 2) {
                     sectionTitle("Interior")
                     Text(temp(s.tempIn))
-                        .font(.system(size: 40, weight: .light)).foregroundStyle(.white)
+                        .font(.system(size: 40, weight: .light)).foregroundStyle(ink.text)
                         .accessibilityLabel(spokenTemp("Interior", s.tempIn))
                     if let h = s.humidityIn {
                         chip("humidity.fill", "\(Int(h))%", spoken: "Humedad")
@@ -219,13 +228,13 @@ struct NetatmoWidgetView: View {
             HStack(alignment: .center, spacing: 14) {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(temp(s.temperature))
-                        .font(.system(size: 52, weight: .light)).foregroundStyle(.white)
+                        .font(.system(size: 52, weight: .light)).foregroundStyle(ink.text)
                         // The rings compete for the same row: without this the temperature
                         // gets squeezed to "2…" instead of the rings giving way.
                         .lineLimit(1).minimumScaleFactor(0.7).fixedSize()
                         .accessibilityLabel(spokenTemp("Exterior", s.temperature))
                     if let mn = s.tempMinOut, let mx = s.tempMaxOut {
-                        RangeBar(min: mn, max: mx, current: s.temperature)
+                        RangeBar(min: mn, max: mx, current: s.temperature, ink: ink)
                     }
                 }
                 Spacer(minLength: 0)
@@ -235,13 +244,13 @@ struct NetatmoWidgetView: View {
             }
 
             Spacer(minLength: 0)
-            Divider().overlay(.white.opacity(0.25))
+            Divider().overlay(ink.soft(0.25))
             Spacer(minLength: 0)
 
             sectionTitle("Interior")
             HStack(alignment: .center, spacing: 14) {
                 Text(temp(s.tempIn))
-                    .font(.system(size: 52, weight: .light)).foregroundStyle(.white)
+                    .font(.system(size: 52, weight: .light)).foregroundStyle(ink.text)
                     .lineLimit(1).minimumScaleFactor(0.7).fixedSize()
                     .accessibilityLabel(spokenTemp("Interior", s.tempIn))
                 Spacer(minLength: 0)
@@ -260,37 +269,37 @@ struct NetatmoWidgetView: View {
     // MARK: Rings (comfort ranges, so a full ring always means "a lot of this")
 
     private func humidityRing(_ h: Double, size: CGFloat = 44) -> some View {
-        SensorRing(value: h, min: 0, max: 100, icon: "humidity.fill", tint: .cyan,
-                   text: "\(Int(h))%", caption: "Humedad", size: size)
+        SensorRing(value: h, min: 0, max: 100, icon: "humidity.fill", tint: ink.cool,
+                   text: "\(Int(h))%", caption: "Humedad", ink: ink, size: size)
     }
 
     /// 980–1040 hPa covers everything short of a hurricane, so the arc actually moves.
     private func pressureRing(_ p: Double, size: CGFloat = 44) -> some View {
-        SensorRing(value: p, min: 980, max: 1040, icon: "gauge.medium", tint: WidgetTheme.greenBright,
-                   text: "\(Int(p))", caption: "Presión", size: size)
+        SensorRing(value: p, min: 980, max: 1040, icon: "gauge.medium", tint: ink.green,
+                   text: "\(Int(p))", caption: "Presión", ink: ink, size: size)
     }
 
-    /// Netatmo's own comfort bands: ≤1000 good (white), ≤1600 fair (amber), above that poor (red).
+    /// Netatmo's own comfort bands: ≤1000 good (green), ≤1600 fair (amber), above that poor (red).
     private func co2Ring(_ c: Double, size: CGFloat = 44) -> some View {
         SensorRing(value: c, min: 400, max: 2000, icon: "aqi.medium", tint: co2Color(c),
-                   text: "\(Int(c))", caption: "CO₂ ppm", size: size)
+                   text: "\(Int(c))", caption: "CO₂ ppm", ink: ink, size: size)
     }
 
     private func noiseRing(_ n: Double, size: CGFloat = 44) -> some View {
-        SensorRing(value: n, min: 30, max: 90, icon: "speaker.wave.2.fill", tint: .white.opacity(0.85),
-                   text: "\(Int(n))", caption: "Ruido dB", size: size)
+        SensorRing(value: n, min: 30, max: 90, icon: "speaker.wave.2.fill", tint: ink.soft(0.85),
+                   text: "\(Int(n))", caption: "Ruido dB", ink: ink, size: size)
     }
 
     /// 10 mm of rain in a day is already a wet day round here — that's a full ring.
     private func rainRing(_ r: Double, size: CGFloat = 44) -> some View {
-        SensorRing(value: r, min: 0, max: 10, icon: "cloud.rain.fill", tint: .cyan,
-                   text: rain(r), caption: "Lluvia", size: size)
+        SensorRing(value: r, min: 0, max: 10, icon: "cloud.rain.fill", tint: ink.cool,
+                   text: rain(r), caption: "Lluvia", ink: ink, size: size)
     }
 
     private func co2Color(_ ppm: Double) -> Color {
-        if ppm > 1600 { return Color(red: 0.95, green: 0.45, blue: 0.40) }
-        if ppm > 1000 { return WidgetTheme.sun }
-        return WidgetTheme.greenBright
+        if ppm > 1600 { return ink.red }
+        if ppm > 1000 { return ink.amber }
+        return ink.green
     }
 
     // MARK: Pieces
@@ -301,13 +310,13 @@ struct NetatmoWidgetView: View {
             Text(s.stationName).lineLimit(1).minimumScaleFactor(0.85)
         }
         .font(.caption2.weight(.semibold))
-        .foregroundStyle(.white.opacity(0.9))
+        .foregroundStyle(ink.soft(0.9))
     }
 
     private func sectionTitle(_ key: LocalizedStringKey) -> some View {
         Text(key)
             .font(.system(size: 9, weight: .bold))
-            .foregroundStyle(.white.opacity(0.65))
+            .foregroundStyle(ink.soft(0.65))
             .textCase(.uppercase)
     }
 
@@ -315,22 +324,22 @@ struct NetatmoWidgetView: View {
     private func chip(_ icon: String, _ value: String, spoken: LocalizedStringResource) -> some View {
         Label(value, systemImage: icon)
             .font(.caption.weight(.medium))
-            .foregroundStyle(.white.opacity(0.9)).labelStyle(.titleAndIcon)
+            .foregroundStyle(ink.soft(0.9)).labelStyle(.titleAndIcon)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(Text("\(String(localized: spoken)): \(value)"))
     }
 
     private func updated(_ s: NetatmoSnapshot) -> some View {
         Text("Act. \(timeString(s.date))")
-            .font(.system(size: 9)).foregroundStyle(.white.opacity(0.55))
+            .font(.system(size: 9)).foregroundStyle(ink.soft(0.55))
     }
 
     private var placeholder: some View {
         VStack(spacing: 6) {
             Image(systemName: "sensor.tag.radiowaves.forward")
-                .font(.title2).foregroundStyle(.white.opacity(0.85))
+                .font(.title2).foregroundStyle(ink.soft(0.85))
             Text("Abre la app para actualizar")
-                .font(.caption2).foregroundStyle(.white.opacity(0.7))
+                .font(.caption2).foregroundStyle(ink.soft(0.7))
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

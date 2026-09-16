@@ -94,7 +94,14 @@ struct WeatherProvider: AppIntentTimelineProvider {
 
 struct WeatherWidgetView: View {
     @Environment(\.widgetFamily) private var family
+    @Environment(\.widgetRenderingMode) private var renderingMode
     let entry: WeatherEntry
+
+    /// White on green and dark temperature colours, dark ink on the light ones.
+    private var ink: WidgetInk {
+        WidgetInk(background: entry.background, temperature: currentTemp.map(Double.init),
+                  renderingMode: renderingMode)
+    }
 
     var body: some View {
         Group {
@@ -206,33 +213,33 @@ struct WeatherWidgetView: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 4) {
                     Text(locationTitle).font(.caption2.weight(.semibold))
-                        .foregroundStyle(.white.opacity(0.9)).lineLimit(1)
+                        .foregroundStyle(ink.soft(0.9)).lineLimit(1)
                     alertChip(compact: true)
                 }
                 HStack(alignment: .top, spacing: 4) {
                     Text(currentTemp.map { "\($0)°" } ?? "—")
-                        .font(.system(size: 44, weight: .regular)).foregroundStyle(.white)
+                        .font(.system(size: 44, weight: .regular)).foregroundStyle(ink.text)
                         .accessibilityLabel(currentTempAccessibility)
                     if let code = entry.aemet?.skyCode {
                         Image(systemName: SkyIcon.symbol(for: code))
                             .font(.title3)
-                            .foregroundStyle(.white, SkyIcon.color(for: code))
+                            .foregroundStyle(ink.text, SkyIcon.color(for: code))
                             .padding(.top, 6)
                             .accessibilityHidden(true)   // the condition text below reads it
                     }
                 }
                 if let a = entry.aemet {
                     Text(a.skyDescription).font(.caption2)
-                        .foregroundStyle(.white.opacity(0.85)).lineLimit(1)
+                        .foregroundStyle(ink.soft(0.85)).lineLimit(1)
                 }
                 Spacer(minLength: 0)
                 if entry.aemet?.tempMax != nil || entry.aemet?.tempMin != nil {
                     HStack(spacing: 8) {
                         if let mx = entry.aemet?.tempMax {
-                            Label("\(mx)°", systemImage: "arrow.up").foregroundStyle(.white)
+                            Label("\(mx)°", systemImage: "arrow.up").foregroundStyle(ink.text)
                         }
                         if let mn = entry.aemet?.tempMin {
-                            Label("\(mn)°", systemImage: "arrow.down").foregroundStyle(.white.opacity(0.7))
+                            Label("\(mn)°", systemImage: "arrow.down").foregroundStyle(ink.soft(0.7))
                         }
                     }
                     .font(.caption.weight(.medium)).labelStyle(.titleAndIcon)
@@ -252,7 +259,7 @@ struct WeatherWidgetView: View {
                                 .accessibilityLabel(Text("Viento \(w) kilómetros por hora"))
                         }
                     }
-                    .font(.caption2).foregroundStyle(.white.opacity(0.8)).labelStyle(.titleAndIcon)
+                    .font(.caption2).foregroundStyle(ink.soft(0.8)).labelStyle(.titleAndIcon)
                 }
             }
             .padding(12)
@@ -276,7 +283,7 @@ struct WeatherWidgetView: View {
                 // any net height added here pushes the hourly row's rain % off the widget.
                 HStack(spacing: 5) {
                     Text(locationTitle).font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.white).lineLimit(1).layoutPriority(1)
+                        .foregroundStyle(ink.text).lineLimit(1).layoutPriority(1)
                     alertChip(compact: false)
                 }
                 .padding(.top, 2)
@@ -320,7 +327,7 @@ struct WeatherWidgetView: View {
                 }
                 let hours = upcomingHours
                 if !hours.isEmpty {
-                    Divider().overlay(.white.opacity(0.25)).padding(.vertical, 10)
+                    Divider().overlay(ink.soft(0.25)).padding(.vertical, 10)
                     HStack(spacing: 0) {
                         ForEach(Array(hours.prefix(6).enumerated()), id: \.offset) { _, h in
                             hourColumn(h).frame(maxWidth: .infinity)
@@ -328,7 +335,7 @@ struct WeatherWidgetView: View {
                     }
                 }
                 if let days = entry.aemet?.daily, !days.isEmpty {
-                    Divider().overlay(.white.opacity(0.25)).padding(.vertical, 10)
+                    Divider().overlay(ink.soft(0.25)).padding(.vertical, 10)
                     let mins = days.prefix(5).compactMap(\.tempMin)
                     let maxs = days.prefix(5).compactMap(\.tempMax)
                     let weekMin = mins.min() ?? 0
@@ -359,25 +366,25 @@ struct WeatherWidgetView: View {
             if showLocation {
                 HStack(spacing: 5) {
                     Text(locationTitle).font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.white).lineLimit(1).layoutPriority(1)
+                        .foregroundStyle(ink.text).lineLimit(1).layoutPriority(1)
                     if showAlert { alertChip(compact: false) }
                 }
             }
             HStack(alignment: .top, spacing: 6) {
                 Text(currentTemp.map { "\($0)°" } ?? "—")
-                    .font(.system(size: tempSize, weight: .regular)).foregroundStyle(.white)
+                    .font(.system(size: tempSize, weight: .regular)).foregroundStyle(ink.text)
                     .accessibilityLabel(currentTempAccessibility)
                 if let code = entry.aemet?.skyCode {
                     Image(systemName: SkyIcon.symbol(for: code))
                         .font(.title2)
-                        .foregroundStyle(.white, SkyIcon.color(for: code))
+                        .foregroundStyle(ink.text, SkyIcon.color(for: code))
                         .padding(.top, tempSize * 0.18)
                         .accessibilityHidden(true)   // the condition text below reads it
                 }
             }
             if let a = entry.aemet {
                 Text(a.skyDescription).font(.caption)
-                    .foregroundStyle(.white.opacity(0.85)).lineLimit(1)
+                    .foregroundStyle(ink.soft(0.85)).lineLimit(1)
             }
         }
     }
@@ -390,10 +397,10 @@ struct WeatherWidgetView: View {
             if entry.aemet?.tempMax != nil || entry.aemet?.tempMin != nil {
                 HStack(spacing: 8) {
                     if let mx = entry.aemet?.tempMax {
-                        Label("\(mx)°", systemImage: "arrow.up").foregroundStyle(.white)
+                        Label("\(mx)°", systemImage: "arrow.up").foregroundStyle(ink.text)
                     }
                     if let mn = entry.aemet?.tempMin {
-                        Label("\(mn)°", systemImage: "arrow.down").foregroundStyle(.white.opacity(0.7))
+                        Label("\(mn)°", systemImage: "arrow.down").foregroundStyle(ink.soft(0.7))
                     }
                 }
                 .font(maxMinFont)
@@ -404,17 +411,17 @@ struct WeatherWidgetView: View {
             if let a = entry.aemet {
                 if let h = a.humidity {
                     Label("\(h)%", systemImage: "humidity.fill")
-                        .font(.caption).foregroundStyle(.white.opacity(0.85))
+                        .font(.caption).foregroundStyle(ink.soft(0.85))
                         .accessibilityLabel(Text("Humedad \(h) por ciento"))
                 }
                 if let w = a.windKmh {
                     Label("\(w) km/h", systemImage: "wind")
-                        .font(.caption).foregroundStyle(.white.opacity(0.85))
+                        .font(.caption).foregroundStyle(ink.soft(0.85))
                         .accessibilityLabel(Text("Viento \(w) kilómetros por hora"))
                 }
                 if showUpdated {
                     Text("Act. \(timeString(a.date))")
-                        .font(.caption2).foregroundStyle(.white.opacity(0.6))
+                        .font(.caption2).foregroundStyle(ink.soft(0.6))
                 }
             }
         }
@@ -434,14 +441,14 @@ struct WeatherWidgetView: View {
     private func hourColumn(_ h: AemetHourPoint, probLift: CGFloat = 0) -> some View {
         VStack(spacing: 4) {
             Text(h.isToday ? String(format: "%02d", h.hour) : weekday(forHour: h))
-                .font(.caption2).foregroundStyle(.white.opacity(0.8))
+                .font(.caption2).foregroundStyle(ink.soft(0.8))
             Image(systemName: SkyIcon.symbol(for: h.skyCode))
                 .font(.body)
-                .foregroundStyle(.white, SkyIcon.color(for: h.skyCode))
+                .foregroundStyle(ink.text, SkyIcon.color(for: h.skyCode))
                 .frame(height: 20)
-            Text("\(h.temp)°").font(.footnote.weight(.semibold)).foregroundStyle(.white)
+            Text("\(h.temp)°").font(.footnote.weight(.semibold)).foregroundStyle(ink.text)
             if let p = h.prob, p > 0 {
-                Text("\(p)%").font(.system(size: 9)).foregroundStyle(WidgetTheme.greenBright)
+                Text("\(p)%").font(.system(size: 9)).foregroundStyle(ink.rain)
                     // Draw at natural width so "100%" (one digit wider) never gets an ellipsis;
                     // it's tiny next to the column width, so it can't overlap neighbours.
                     .lineLimit(1).fixedSize()
@@ -466,16 +473,16 @@ struct WeatherWidgetView: View {
     private func dayRow(_ d: AemetDayPoint, weekMin: Int, weekMax: Int) -> some View {
         HStack(spacing: 8) {
             Text(weekday(d.date)).font(.subheadline.weight(.medium))
-                .foregroundStyle(.white).frame(width: 42, alignment: .leading)
+                .foregroundStyle(ink.text).frame(width: 42, alignment: .leading)
             Image(systemName: SkyIcon.symbol(for: d.skyCode))
                 .font(.body)
-                .foregroundStyle(.white, SkyIcon.color(for: d.skyCode))
+                .foregroundStyle(ink.text, SkyIcon.color(for: d.skyCode))
                 .frame(width: 24)
             if let p = d.prob, p > 0 {
                 // Draw the drop + "%" at natural width so "100%" (a digit wider) never
                 // gets an ellipsis; the fixed 48pt slot keeps the columns aligned.
                 Label("\(p)%", systemImage: "drop.fill")
-                    .font(.caption2).foregroundStyle(WidgetTheme.greenBright)
+                    .font(.caption2).foregroundStyle(ink.rain)
                     .labelStyle(.titleAndIcon)
                     .lineLimit(1).fixedSize()
                     .frame(width: 48, alignment: .leading)
@@ -483,11 +490,11 @@ struct WeatherWidgetView: View {
                 Spacer().frame(width: 48)
             }
             Text(d.tempMin.map { "\($0)°" } ?? "—")
-                .font(.subheadline).foregroundStyle(.white.opacity(0.7))
+                .font(.subheadline).foregroundStyle(ink.soft(0.7))
                 .frame(width: 30, alignment: .trailing)
             rangeBar(min: d.tempMin, max: d.tempMax, weekMin: weekMin, weekMax: weekMax)
             Text(d.tempMax.map { "\($0)°" } ?? "—")
-                .font(.subheadline.weight(.semibold)).foregroundStyle(.white)
+                .font(.subheadline.weight(.semibold)).foregroundStyle(ink.text)
                 .frame(width: 30, alignment: .leading)
         }
         // Read the whole row as one phrase instead of "Lun", "12°", "24°" separately.
@@ -512,9 +519,9 @@ struct WeatherWidgetView: View {
             let lo = CGFloat((dMin ?? weekMin) - weekMin) / span * w
             let hi = CGFloat((dMax ?? weekMax) - weekMin) / span * w
             ZStack(alignment: .leading) {
-                Capsule().fill(.white.opacity(0.2)).frame(height: 4)
+                Capsule().fill(ink.soft(0.2)).frame(height: 4)
                 Capsule()
-                    .fill(LinearGradient(colors: [.cyan, WidgetTheme.sun],
+                    .fill(LinearGradient(colors: ink.rangeColors,
                                          startPoint: .leading, endPoint: .trailing))
                     .frame(width: max(6, hi - lo), height: 4)
                     .offset(x: lo)
@@ -528,9 +535,9 @@ struct WeatherWidgetView: View {
     private var placeholderContent: some View {
         VStack(spacing: 6) {
             Image(systemName: "antenna.radiowaves.left.and.right.slash")
-                .font(.title2).foregroundStyle(.white.opacity(0.85))
+                .font(.title2).foregroundStyle(ink.soft(0.85))
             Text("Abre la app para actualizar")
-                .font(.caption2).foregroundStyle(.white.opacity(0.7))
+                .font(.caption2).foregroundStyle(ink.soft(0.7))
                 .multilineTextAlignment(.center)
         }
     }
