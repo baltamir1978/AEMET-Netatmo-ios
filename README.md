@@ -58,7 +58,7 @@ Cuatro widgets en tamaños pequeño, mediano y grande (`AppPersonalWidget`):
 
 ## Requisitos
 
-- Xcode 26 o superior
+- Xcode 26 o superior (modo de lenguaje Swift 6; probado con Xcode 27)
 - iOS 26.5+
 - API key de [AEMET OpenData](https://opendata.aemet.es/) *(opcional: sin ella se usa Open-Meteo)*
 - Cuenta y app registrada en [Netatmo Connect](https://dev.netatmo.com/) *(opcional: solo para las pestañas Actual y Gráficas)*

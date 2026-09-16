@@ -10,7 +10,7 @@ struct TideStationEntity: AppEntity {
     let name: String
 
     static var typeDisplayRepresentation: TypeDisplayRepresentation { "Estación de mareas" }
-    static var defaultQuery = TideStationQuery()
+    static let defaultQuery = TideStationQuery()
 
     var displayRepresentation: DisplayRepresentation { DisplayRepresentation(title: "\(name)") }
 }
@@ -34,8 +34,8 @@ struct TideStationQuery: EntityQuery {
 }
 
 struct SelectTideStationIntent: WidgetConfigurationIntent {
-    static var title: LocalizedStringResource = "Estación de mareas"
-    static var description = IntentDescription("Elige el puerto cuyas mareas muestra el widget.")
+    static let title: LocalizedStringResource = "Estación de mareas"
+    static let description = IntentDescription("Elige el puerto cuyas mareas muestra el widget.")
 
     @Parameter(title: "Estación")
     var station: TideStationEntity?

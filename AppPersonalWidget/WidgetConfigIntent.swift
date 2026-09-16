@@ -8,7 +8,7 @@ struct WidgetLocationEntity: AppEntity {
     let name: String
 
     static var typeDisplayRepresentation: TypeDisplayRepresentation { "Ubicación" }
-    static var defaultQuery = WidgetLocationQuery()
+    static let defaultQuery = WidgetLocationQuery()
 
     var displayRepresentation: DisplayRepresentation { DisplayRepresentation(title: "\(name)") }
 
@@ -48,8 +48,8 @@ protocol LocationSelectingIntent {
 
 /// Configuration intent for the Sol·Luna widget ("Editar widget" → Ubicación).
 struct SelectLocationIntent: WidgetConfigurationIntent, LocationSelectingIntent {
-    static var title: LocalizedStringResource = "Ubicación"
-    static var description = IntentDescription("Elige la ciudad que muestra el widget, o usa tu ubicación actual.")
+    static let title: LocalizedStringResource = "Ubicación"
+    static let description = IntentDescription("Elige la ciudad que muestra el widget, o usa tu ubicación actual.")
 
     @Parameter(title: "Ubicación")
     var location: WidgetLocationEntity?
@@ -83,7 +83,7 @@ enum TempBackground: String, AppEnum {
 
     static var typeDisplayRepresentation: TypeDisplayRepresentation { "Fondo" }
 
-    static var caseDisplayRepresentations: [TempBackground: DisplayRepresentation] = [
+    static let caseDisplayRepresentations: [TempBackground: DisplayRepresentation] = [
         .theme:       DisplayRepresentation(title: "Verde"),
         .temperature: DisplayRepresentation(title: "Color según la temperatura"),
     ]
@@ -91,8 +91,8 @@ enum TempBackground: String, AppEnum {
 
 /// Configuration intent for the Netatmo widget ("Editar widget" → Fondo).
 struct NetatmoStyleIntent: WidgetConfigurationIntent {
-    static var title: LocalizedStringResource = "Estación Netatmo"
-    static var description = IntentDescription("Elige si el fondo sigue el verde de la app o cambia con la temperatura exterior.")
+    static let title: LocalizedStringResource = "Estación Netatmo"
+    static let description = IntentDescription("Elige si el fondo sigue el verde de la app o cambia con la temperatura exterior.")
 
     @Parameter(title: "Fondo", default: .theme)
     var background: TempBackground
@@ -102,8 +102,8 @@ struct NetatmoStyleIntent: WidgetConfigurationIntent {
 
 /// Configuration intent for the Tiempo widget: pick the city *and* the background style.
 struct WeatherStyleIntent: WidgetConfigurationIntent, LocationSelectingIntent {
-    static var title: LocalizedStringResource = "Tiempo"
-    static var description = IntentDescription("Elige la ciudad y si el fondo sigue el verde de la app o cambia con la temperatura.")
+    static let title: LocalizedStringResource = "Tiempo"
+    static let description = IntentDescription("Elige la ciudad y si el fondo sigue el verde de la app o cambia con la temperatura.")
 
     @Parameter(title: "Ubicación")
     var location: WidgetLocationEntity?

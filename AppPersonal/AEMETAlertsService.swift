@@ -209,11 +209,6 @@ private final class CAPDocumentParser: NSObject, XMLParserDelegate {
     private var text = ""
     private var lastValueName = ""   // tracks <valueName> so we can read the paired <value>
 
-    private static let iso: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime]
-        return f
-    }()
 
     func parse(_ data: Data) -> [Info] {
         infos = []
@@ -241,8 +236,8 @@ private final class CAPDocumentParser: NSObject, XMLParserDelegate {
         switch el {
         case "language": cur.language = t
         case "event":    cur.event = t
-        case "onset":    cur.onset = Self.iso.date(from: t)
-        case "expires":  cur.expires = Self.iso.date(from: t)
+        case "onset":    cur.onset = try? Date(t, strategy: .iso8601)
+        case "expires":  cur.expires = try? Date(t, strategy: .iso8601)
         case "valueName": lastValueName = t
         case "value":
             if lastValueName.contains("fenomeno") {

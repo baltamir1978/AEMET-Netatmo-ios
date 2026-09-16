@@ -12,6 +12,14 @@ App personal que integra varias fuentes de datos (Netatmo, AEMET, sol/luna, mare
 - 2 commits.
 - Cambios **en *staging*** sin commitear: `NetatmoModels.swift`, `SunMoonService.swift`. Confirmar y hacer commit.
 
+## Migración a Swift 6 (16/09/2026)
+
+`SWIFT_VERSION = 6.0` en la app y el widget; compila con Xcode 27 con un único aviso, el de `placemark`, que sigue siendo deliberado (el SDK de iOS 27 tampoco añade sublocalidad ni país ISO a `MKAddressRepresentations`). Cambios:
+
+- `AnyCodable.value` pasa de `Any?` a `(any Sendable)?`, para que las respuestas de Netatmo puedan salir del `actor NetatmoService`.
+- El parser CAP de AEMET usa `Date.ISO8601FormatStyle` en vez de un `ISO8601DateFormatter` estático compartido (no es `Sendable`). Mismo resultado con las fechas de AEMET; además acepta fracciones de segundo.
+- Las propiedades estáticas de los App Intents del widget (`title`, `description`, `defaultQuery`…) pasan de `static var` a `static let`.
+
 ## Puntos fuertes
 
 - ✅ **Gestión de secretos correcta**: `Secrets.swift` está en `.gitignore` y solo se versiona `Secrets.swift.example`. Verificado: el secreto real **no** está en el repo.

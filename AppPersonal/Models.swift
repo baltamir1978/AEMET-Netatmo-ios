@@ -3,7 +3,7 @@ import Foundation
 // MARK: - Flexible JSON decoder for Netatmo dashboardData
 
 nonisolated struct AnyCodable: Decodable {
-    let value: Any?
+    let value: (any Sendable)?
 
     init(from decoder: Decoder) throws {
         let c = try decoder.singleValueContainer()
