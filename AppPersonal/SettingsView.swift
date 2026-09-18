@@ -204,6 +204,22 @@ struct SettingsView: View {
     }
 }
 
+/// Display names for the scale picker. Here rather than on `TempScale` itself, which the
+/// widget compiles too: the names only ever show in Ajustes, so only the app's string
+/// catalog should carry them.
+private extension TempScale {
+    var name: LocalizedStringResource {
+        switch self {
+        case .bands:     return "Pocas bandas"
+        case .classic:   return "Mapa clásico"
+        case .diverging: return "Blanco en el medio"
+        case .earth:     return "Tierra"
+        case .neon:      return "Neón"
+        case .night:     return "Nocturna"
+        }
+    }
+}
+
 /// A temperature scale's bands as a row of flat swatches, coldest on the left — the map
 /// legend the widget background steps through.
 private struct TempScaleSwatch: View {

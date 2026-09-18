@@ -230,17 +230,6 @@ enum TempScale: String, CaseIterable, Identifiable, Sendable {
 
     var id: String { rawValue }
 
-    var name: String {
-        switch self {
-        case .bands:     return "Pocas bandas"
-        case .classic:   return "Mapa clásico"
-        case .diverging: return "Blanco en el medio"
-        case .earth:     return "Tierra"
-        case .neon:      return "Neón"
-        case .night:     return "Nocturna"
-        }
-    }
-
     /// Lower edge of each band after the first (the first takes everything colder) for the
     /// scales that step every 5°: ≤ −6, −5…−1, 0…4 … 35…39, ≥ 40.
     private static let fiveDegreeEdges = [-5, 0, 5, 10, 15, 20, 25, 30, 35, 40]

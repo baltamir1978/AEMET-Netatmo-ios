@@ -1018,34 +1018,6 @@
         }
       }
     },
-    "Cargando el listado de municipios…" : {
-      "localizations" : {
-        "ca" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Carregant la llista de municipis…"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Loading the list of towns…"
-          }
-        },
-        "eu" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Udalerrien zerrenda kargatzen…"
-          }
-        },
-        "gl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cargando a listaxe de concellos…"
-          }
-        }
-      }
-    },
     "Calidad aire" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1071,6 +1043,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Calidade do aire"
+          }
+        }
+      }
+    },
+    "Cargando el listado de municipios…" : {
+      "localizations" : {
+        "ca" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Carregant la llista de municipis…"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loading the list of towns…"
+          }
+        },
+        "eu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Udalerrien zerrenda kargatzen…"
+          }
+        },
+        "gl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cargando a listaxe de concellos…"
           }
         }
       }
@@ -1192,6 +1192,202 @@
     },
     "Client Secret" : {
 
+    },
+    "Pocas bandas" : {
+      "localizations" : {
+        "ca" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Poques bandes"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Few bands"
+          }
+        },
+        "eu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Banda gutxi"
+          }
+        },
+        "gl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Poucas bandas"
+          }
+        }
+      }
+    },
+    "Mapa clásico" : {
+      "localizations" : {
+        "ca" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mapa clàssic"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Classic map"
+          }
+        },
+        "eu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mapa klasikoa"
+          }
+        },
+        "gl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mapa clásico"
+          }
+        }
+      }
+    },
+    "Blanco en el medio" : {
+      "localizations" : {
+        "ca" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Blanc al mig"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White in the middle"
+          }
+        },
+        "eu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zuria erdian"
+          }
+        },
+        "gl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Branco no medio"
+          }
+        }
+      }
+    },
+    "Tierra" : {
+      "localizations" : {
+        "ca" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Terra"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Earth"
+          }
+        },
+        "eu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lurra"
+          }
+        },
+        "gl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Terra"
+          }
+        }
+      }
+    },
+    "Neón" : {
+      "localizations" : {
+        "ca" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Neó"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Neon"
+          }
+        },
+        "eu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Neoia"
+          }
+        },
+        "gl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Neón"
+          }
+        }
+      }
+    },
+    "Nocturna" : {
+      "localizations" : {
+        "ca" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nocturna"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Night"
+          }
+        },
+        "eu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gauekoa"
+          }
+        },
+        "gl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nocturna"
+          }
+        }
+      }
+    },
+    "Colores" : {
+      "localizations" : {
+        "ca" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Colors"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Colours"
+          }
+        },
+        "eu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Koloreak"
+          }
+        },
+        "gl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cores"
+          }
+        }
+      }
     },
     "Configura Netatmo en Ajustes" : {
       "localizations" : {
@@ -2765,6 +2961,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "IPMA · %@"
+          }
+        }
+      }
+    },
+    "La escala de colores de los widgets Tiempo y Netatmo cuando su fondo es «Color según la temperatura». Ese fondo se elige en cada widget, desde «Editar widget»." : {
+      "localizations" : {
+        "ca" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L'escala de colors dels widgets Temps i Netatmo quan el fons és «Color segons la temperatura». Aquest fons es tria a cada widget, des de «Edita el widget»."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The colour scale of the Weather and Netatmo widgets when their background is «Colour by temperature». That background is chosen on each widget, from «Edit widget»."
+          }
+        },
+        "eu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eguraldia eta Netatmo widgeten kolore-eskala, atzeko planoa «Kolorea tenperaturaren arabera» denean. Atzeko plano hori widget bakoitzean aukeratzen da, «Editatu widgeta» atalean."
+          }
+        },
+        "gl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A escala de cores dos widgets Tempo e Netatmo cando o seu fondo é «Cor segundo a temperatura». Ese fondo escóllese en cada widget, desde «Editar widget»."
           }
         }
       }
@@ -5529,6 +5753,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ventos"
+          }
+        }
+      }
+    },
+    "Widgets · Color según la temperatura" : {
+      "localizations" : {
+        "ca" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Widgets · Color segons la temperatura"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Widgets · Colour by temperature"
+          }
+        },
+        "eu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Widgetak · Kolorea tenperaturaren arabera"
+          }
+        },
+        "gl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Widgets · Cor segundo a temperatura"
           }
         }
       }
