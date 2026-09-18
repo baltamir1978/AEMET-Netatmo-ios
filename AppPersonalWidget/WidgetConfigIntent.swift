@@ -74,7 +74,7 @@ func resolveWidgetLocation(_ intent: some LocationSelectingIntent) -> SavedLocat
 // MARK: - Temperature-coloured background
 
 /// Widget background: the app's green, or a colour driven by the current temperature
-/// (deep blue near zero, light blue at 20–26°, deep red at 40-45°; see `TempPalette`). Offered as an option rather
+/// (whichever `TempScale` is picked in Ajustes; see `TempPalette`). Offered as an option rather
 /// than imposed: the colour is striking, but it also makes the widget change look every few
 /// hours. Shared by the Netatmo widget (outdoor temp) and the Tiempo widget (AEMET temp).
 enum TempBackground: String, AppEnum {

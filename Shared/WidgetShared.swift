@@ -211,6 +211,82 @@ struct AemetSnapshot: Codable {
     var windKmh: Int?              // km/h, from the observation station
 }
 
+// MARK: - Temperature colour scale
+
+/// The colour scale behind the widgets' «Color según la temperatura» background, picked in
+/// Ajustes. Every scale is a map legend: one flat colour per temperature band, switching at
+/// the band's edge and never blending in between, so no muddy in-between tone can appear.
+/// Bands are read off the *rounded* temperature — the number the widget shows — so a
+/// reading of 19,6° displayed as «20°» takes the colour of 20.
+enum TempScale: String, CaseIterable, Identifiable, Sendable {
+    case bands      // Pocas bandas
+    case classic    // Mapa clásico
+    case diverging  // Blanco en el medio
+    case earth      // Tierra
+    case neon       // Neón
+    case night      // Nocturna
+
+    static let `default`: TempScale = .bands
+
+    var id: String { rawValue }
+
+    var name: String {
+        switch self {
+        case .bands:     return "Pocas bandas"
+        case .classic:   return "Mapa clásico"
+        case .diverging: return "Blanco en el medio"
+        case .earth:     return "Tierra"
+        case .neon:      return "Neón"
+        case .night:     return "Nocturna"
+        }
+    }
+
+    /// Lower edge of each band after the first (the first takes everything colder) for the
+    /// scales that step every 5°: ≤ −6, −5…−1, 0…4 … 35…39, ≥ 40.
+    private static let fiveDegreeEdges = [-5, 0, 5, 10, 15, 20, 25, 30, 35, 40]
+
+    /// Band colours, coldest first, as 0xRRGGBB.
+    var colors: [UInt32] {
+        switch self {
+        case .bands:     // ≤ 0, 1–9, 10–17, 18–25, 26–31, 32–37, ≥ 38
+            return [0x1F3A93, 0x2E7BD6, 0x1FAFAF, 0x3CB371, 0xF4C430, 0xF07F24, 0xD62828]
+        case .classic:   // green, not yellow, at 20–24°: yellow read as hotter than it is
+            return [0x5B2C91, 0x2E3FA8, 0x1F66D1, 0x1B9AE0, 0x19B3B0, 0x2E9E5B,
+                    0x6CC06A, 0xF2D335, 0xF7922F, 0xE5432A, 0xA3172B]
+        case .diverging: // ColorBrewer RdBu, near-white at 20–24°
+            return [0x053061, 0x1B4F95, 0x2166AC, 0x4393C3, 0x92C5DE, 0xD1E5F0,
+                    0xF7F7F7, 0xFDDBC7, 0xF4A582, 0xD6604D, 0xB2182B]
+        case .earth:
+            return [0x2B3440, 0x37475A, 0x45607A, 0x5B7F9C, 0x7FA0B5, 0xA8BFA0,
+                    0xD9C58F, 0xD9A15E, 0xC8733F, 0xA4442E, 0x6E2620]
+        case .neon:
+            return [0x3A0CA3, 0x3F37C9, 0x4361EE, 0x3A86FF, 0x00B4D8, 0x00D1A0,
+                    0x9EF01A, 0xFFD60A, 0xFF8C1A, 0xFF4122, 0xD90429]
+        case .night:     // dark throughout, so the text stays white
+            return [0x0B1030, 0x15235E, 0x1D3A8A, 0x0F4A6B, 0x0E5E5E, 0x1F5E3A,
+                    0x7A4E12, 0x8F3F10, 0x9C3A0F, 0x8C1C1C, 0x5C0B1A]
+        }
+    }
+
+    /// Lower edge of each band after the first, matching `colors` one-for-one from index 1.
+    private var edges: [Int] {
+        self == .bands ? [1, 10, 18, 26, 32, 38] : Self.fiveDegreeEdges
+    }
+
+    /// The band colour for a reading, as 0xRRGGBB.
+    func color(for temp: Double) -> UInt32 {
+        let t = Int(temp.rounded())
+        let band = edges.lastIndex { t >= $0 }.map { $0 + 1 } ?? 0
+        return colors[band]
+    }
+
+    static func swatch(_ hex: UInt32) -> Color {
+        Color(red: Double((hex >> 16) & 0xFF) / 255,
+              green: Double((hex >> 8) & 0xFF) / 255,
+              blue: Double(hex & 0xFF) / 255)
+    }
+}
+
 // MARK: - Store
 
 /// Read/write helpers over the App Group `UserDefaults` suite.
@@ -225,6 +301,14 @@ enum WidgetStore {
     private static let aemetApiKeyKey = "widget.aemet.apiKey"
     private static let stationOverridesKey = "widget.stations.overrides"
     private static let lastRefreshKey = "widget.refresh.lastRun"
+    /// Public so Ajustes can bind to it with `@AppStorage`.
+    static let tempScaleKey = "widget.tempScale"
+
+    // Temperature colour scale ---------------------------------------------------
+
+    static func loadTempScale() -> TempScale {
+        defaults?.string(forKey: tempScaleKey).flatMap(TempScale.init(rawValue:)) ?? .default
+    }
 
     // Refresh cadence ----------------------------------------------------------
 

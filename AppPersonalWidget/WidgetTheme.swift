@@ -16,59 +16,33 @@ enum WidgetTheme {
 
 /// Temperature → colour, for the "colour by temperature" widget background.
 ///
-/// Built in bands rather than as one long blend: deep blues through turquoise and green for
-/// the cold side, a light sky blue for the pleasant 20–26°, and gold → orange → blood red for
-/// the heat. Inside a band stops are blended in OKLab, which keeps the in-between tones clean;
-/// *between* bands the colour steps at the half degree. The old single blend ran green → lime →
-/// gold in RGB and put a muddy olive-mustard right on 21–24°, the most common readings of the
-/// year.
+/// The colours themselves live in `TempScale` (shared with the app, which offers the choice
+/// in Ajustes); this adds the widget's side: the gradient under each reading and whether the
+/// text on it should be white or dark ink. Every scale steps band by band, like a map legend,
+/// instead of blending: the old single blend put muddy olive-mustards on the most common
+/// readings of the year.
 enum TempPalette {
     private typealias RGB = (r: Double, g: Double, b: Double)
 
-    private static let stops: [(t: Double, c: RGB)] = [
-        (-10, (0.10, 0.14, 0.40)),   // hielo — azul noche
-        ( -5, (0.11, 0.24, 0.60)),   // muy frío — azul
-        (  0, (0.12, 0.34, 0.80)),   // cero — azul intenso
-        (  5, (0.10, 0.48, 0.78)),   // frío — azul-turquesa
-        ( 10, (0.08, 0.60, 0.75)),   // fresco — turquesa
-        ( 14, (0.10, 0.64, 0.60)),   // suave — verde-turquesa
-        ( 18, (0.14, 0.68, 0.46)),   // templado — verde
-        ( 20, (0.525, 0.776, 0.933)), // agradable — azul clarito  #86C6EE
-        ( 23, (0.612, 0.824, 0.957)), //                          #9CD2F4
-        ( 26, (0.702, 0.867, 0.973)), //                          #B3DDF8
-        ( 27, (0.96, 0.76, 0.20)),   // caluroso — dorado
-        ( 30, (0.98, 0.52, 0.10)),   // calor — naranja
-        ( 34, (0.94, 0.30, 0.12)),   // mucho calor — naranja-rojo
-        ( 38, (0.86, 0.14, 0.16)),   // sofocante — rojo
-        ( 42, (0.70, 0.07, 0.12)),   // extremo — rojo profundo
-        ( 45, (0.54, 0.04, 0.10)),   // extremo — rojo sangre
-    ]
-
-    /// Stops after which the next band starts: no blend, a step at the half degree.
-    private static let bandEnds: Set<Double> = [26]
-
-    /// Text colour for the light end of the scale (white doesn't read on the 20–26° blues or
-    /// on the golds and oranges).
+    /// Text colour for the light bands (white doesn't read on pale or bright yellow grounds).
     static let darkInk = Color(red: 0x0B / 255, green: 0x22 / 255, blue: 0x36 / 255)
     private static let darkInkRGB: RGB = (0x0B / 255, 0x22 / 255, 0x36 / 255)
 
-    static func color(for temp: Double) -> Color { color(rgb(for: temp)) }
-
-    /// Background gradient for a reading: the temperature's colour on top, the same hue a step
+    /// Background gradient for a reading: the band's colour on top, the same hue a step
     /// darker at the bottom. Darkening by mixing in black is what turned the warm colours to
-    /// mud, and would grey the light blues. Falls back to the app's green with no reading.
-    static func gradient(for temp: Double?) -> LinearGradient {
+    /// mud, and would grey the pale ones. Falls back to the app's green with no reading.
+    static func gradient(for temp: Double?, scale: TempScale = WidgetStore.loadTempScale()) -> LinearGradient {
         guard let temp else { return WidgetTheme.heroGradient }
-        let top = rgb(for: temp)
+        let top = rgb(for: temp, scale: scale)
         return LinearGradient(colors: [color(top), color(bottom(of: top))],
                               startPoint: .top, endPoint: .bottom)
     }
 
     /// Whether the widget's text should switch to `darkInk` on this reading's background:
     /// whichever of white and dark ink keeps more contrast at the worse end of the gradient.
-    static func prefersDarkInk(for temp: Double?) -> Bool {
+    static func prefersDarkInk(for temp: Double?, scale: TempScale = WidgetStore.loadTempScale()) -> Bool {
         guard let temp else { return false }
-        let top = rgb(for: temp), bot = bottom(of: top)
+        let top = rgb(for: temp, scale: scale), bot = bottom(of: top)
         let white: RGB = (1, 1, 1)
         let onWhite = min(contrast(white, top), contrast(white, bot))
         let onDark = min(contrast(darkInkRGB, top), contrast(darkInkRGB, bot))
@@ -77,19 +51,9 @@ enum TempPalette {
 
     // MARK: Colour maths
 
-    private static func rgb(for temp: Double) -> RGB {
-        guard let first = stops.first, let last = stops.last else { return (0.5, 0.5, 0.5) }
-        if temp <= first.t { return first.c }
-        if temp >= last.t { return last.c }
-        for i in 0..<(stops.count - 1) {
-            let a = stops[i], b = stops[i + 1]
-            guard temp >= a.t, temp <= b.t else { continue }
-            if bandEnds.contains(a.t) { return temp < (a.t + b.t) / 2 ? a.c : b.c }
-            let f = (temp - a.t) / (b.t - a.t)
-            let la = oklab(a.c), lb = oklab(b.c)
-            return srgb((la.0 + (lb.0 - la.0) * f, la.1 + (lb.1 - la.1) * f, la.2 + (lb.2 - la.2) * f))
-        }
-        return last.c
+    private static func rgb(for temp: Double, scale: TempScale) -> RGB {
+        let hex = scale.color(for: temp)
+        return (Double((hex >> 16) & 0xFF) / 255, Double((hex >> 8) & 0xFF) / 255, Double(hex & 0xFF) / 255)
     }
 
     private static func bottom(of c: RGB) -> RGB {
@@ -156,7 +120,7 @@ struct WidgetInk {
     }
 
     /// Chance of rain. Deep blue rather than a dark green on light grounds: a green figure
-    /// all but vanishes on the green of 16–18°.
+    /// all but vanishes on the light greens some scales use.
     var rain: Color { dark ? Color(red: 0.05, green: 0.30, blue: 0.62) : WidgetTheme.greenBright }
     /// Pressure, good CO₂.
     var green: Color { dark ? Color(red: 0.03, green: 0.35, blue: 0.26) : WidgetTheme.greenBright }

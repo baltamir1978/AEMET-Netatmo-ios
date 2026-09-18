@@ -1,156 +1,167 @@
-# Tiempo España — meteorología, sol/luna y mareas
+# Tiempo ES
 
-App de iOS personal que reúne en un solo lugar la predicción y los avisos de **AEMET**, los datos de tu **estación Netatmo**, información de **sol y luna**, **mareas**, **eventos astronómicos**, gráficas históricas y una familia de **widgets** para la pantalla de inicio.
+App personal de iOS con el tiempo de **AEMET** (y del **IPMA** en Portugal), la **estación Netatmo** de casa, **sol y luna**, **mareas**, **eventos astronómicos** y cuatro **widgets** para la pantalla de inicio.
 
-> Repositorio: `github.com/baltamir1978/AEMET-Netatmo-ios`
-> En la pantalla de inicio aparece como **Tiempo ES** (13 caracteres se truncan en una línea).
+> Repositorio: `github.com/baltamir1978/AEMET-Netatmo-ios` · En la pantalla de inicio se llama **Tiempo ES**: «Tiempo España» no cabe en una línea.
 
-## Características
+## Qué hace
 
-### Tiempo (AEMET)
+### Tiempo
 
-- 🌦️ **Predicción oficial de AEMET**: por horas y por días desde la API OpenData (`AEMETService`), con temperatura actual observada de la estación más cercana.
-- ⚠️ **Avisos meteorológicos** en formato CAP por comunidad autónoma (`AEMETAlertsService`).
-- 📍 **Ubicación actual o ciudades seguidas**: busca municipios y guarda los que uses a diario (`LocationStore`, `LocationManagerSheet`, `CurrentLocationService`).
-- 👆 **Una página por ubicación**: se pasa de una a otra deslizando, con su indicador de puntos (la flecha marca la ubicación GPS). Cada página guarda su propia previsión (`CityWeather`, `AemetCityView`) y se pinta desde la caché en disco nada más aparecer, así que una ciudad ya visitada vuelve al instante — y nunca se ve el tiempo de la ciudad anterior bajo el nombre de la nueva. Las páginas de al lado se preparan por adelantado, incluidas las portuguesas, cuya caché no se puede leer de golpe.
-- 🗼 **Selector de estación**: AEMET asigna la más cercana, pero puedes fijar otra por municipio cuando la de al lado no es la de tu valle (`StationPickerSheet`).
-- 🌍 **Sin API key de AEMET también funciona**: la pestaña se sirve completa desde **Open-Meteo** (`OpenMeteoService`), sin cambiar la interfaz.
-- 🇵🇹 **Portugal, con el IPMA** (`IPMAService`): previsión horaria y diaria, observaciones de estación y avisos oficiales del Instituto Português do Mar e da Atmosfera, sin API key. Su catálogo abierto son 35 localidades, así que el selector de estación se convierte allí en un **selector de fuente**: IPMA (capital más próxima, con su distancia) u Open-Meteo en tu coordenada exacta. Fuera de esas 35, Open-Meteo es el valor por defecto a partir de 25 km.
+- 🌦️ **Predicción oficial de AEMET** por horas y por días (API OpenData, `AEMETService`), con la temperatura observada en la estación más cercana y los **avisos** en formato CAP de la comunidad autónoma (`AEMETAlertsService`).
+- 🌍 **Sin clave de AEMET también funciona**: la pestaña se sirve entera desde **Open-Meteo** (`OpenMeteoService`) con la misma interfaz.
+- 🇵🇹 **Portugal con el IPMA** (`IPMAService`), sin clave: previsión, observaciones y avisos oficiales. El IPMA solo publica 35 localidades, así que allí el selector de estación pasa a ser un **selector de fuente**: la capital del IPMA más próxima (con su distancia) u Open-Meteo en tu coordenada exacta. A más de 25 km de cualquiera de esas 35, Open-Meteo va por defecto.
+- 👆 **Una página por ubicación**: la ubicación GPS y las ciudades que sigas, pasando de una a otra con el dedo (`AemetView`, `AemetCityView`). Cada página tiene su propia previsión y caché en disco (`CityWeather`): una ciudad ya visitada aparece al instante y nunca se ve el tiempo de la anterior bajo el nombre de la nueva. Las páginas vecinas se preparan por adelantado.
+- 🗼 **Estación a elegir**: AEMET asigna la más cercana, pero se puede fijar otra por municipio cuando la de al lado no es la de tu valle (`StationPickerSheet`).
 
-### Sol·Luna
+### Sol·Luna y mareas
 
-- ☀️🌙 Orto y ocaso, crepúsculos, fase lunar y calendario mensual (`SunMoonService`, `MoonPhasesService`).
-- 🌌 Eventos astronómicos y solsticios/equinoccios con sus extremos de amanecer y atardecer (`AstroEventsService`, `CosmosView`).
-- 🕐 **Cada sitio en su hora**: la zona sale del territorio, no de un valor fijo peninsular — Canarias (`Atlantic/Canary`), Madeira y Azores (una hora por detrás de Lisboa). Afecta a orto y ocaso, salida y puesta de luna, fases y eventos, en la app y en el widget. Un ocaso en Tenerife que se anunciaba a las 21:50 son en realidad las 20:50.
-- 🌊 **Mareas** del IHM con caché en disco (`TidesService`), con los puertos ordenados por cercanía a la ubicación. **El IHM publica sus tablas en UTC** aunque no lo diga en ninguna parte, y su `date` selecciona un día UTC: cada hora se convierte al reloj del puerto y las mareas se reagrupan por día local, de modo que un día se sirve con las dos o tres tablas UTC que lo solapan (a +02:00 la primera marea suele venir en la de ayer y la última se va a la de mañana). Sin eso, en verano peninsular la pleamar salía dos horas antes de la real. La zona la da el puerto: por coordenadas, con excepción explícita para Lisboa y Tánger. El IPMA no publica tablas de marea (son del Instituto Hidrográfico portugués, sin API abierta): de la costa portuguesa el IHM solo sirve Lisboa, y como toda la costa atlántica ibérica rompe con menos de tres cuartos de hora de diferencia, el puerto más próximo — A Guarda al norte, Ayamonte al sur — es mejor referencia que Lisboa, que va estuario arriba y da medio metro de más.
+- ☀️🌙 Orto y ocaso, crepúsculos, fase lunar y calendario del mes (`SunMoonService`, `MoonPhasesService`); eventos astronómicos, solsticios y equinoccios (`AstroEventsService`, `CosmosView`).
+- 🕐 **Cada sitio en su hora**: la zona horaria sale del territorio. Canarias va con `Atlantic/Canary`, y Madeira y Azores con la suya; en Tenerife el ocaso ya no se anuncia una hora tarde. Vale para la app y para el widget.
+- 🌊 **Mareas del IHM** (`TidesService`), con caché en disco y los puertos ordenados por cercanía.
+  - El IHM publica sus tablas **en UTC** sin decirlo, y su parámetro `date` elige un día UTC. Cada hora se pasa a la del puerto y las mareas se reagrupan por día local, pidiendo las dos o tres tablas UTC que solapan ese día. Sin esto, en verano peninsular la pleamar salía dos horas antes.
+  - De Portugal el IHM solo sirve Lisboa, que queda estuario arriba y da medio metro de más. Como la costa atlántica ibérica rompe con menos de tres cuartos de hora de diferencia, el puerto más próximo (A Guarda al norte, Ayamonte al sur) es mejor referencia.
 
 ### Netatmo (opcional)
 
-- 🌡️ **Datos en tiempo real** de tu estación y módulos: temperatura, humedad, presión, lluvia y viento (`NetatmoService`, OAuth2).
-- 📈 **Gráficas** históricas de las medidas (`GraficasView`).
+- 🌡️ Temperatura, humedad, presión, lluvia y viento de tu estación en tiempo real (`NetatmoService`, OAuth2), y **gráficas** históricas (`GraficasView`).
+- Las pestañas *Actual* y *Gráficas* solo aparecen si hay credenciales de Netatmo.
 
-Las pestañas *Actual* y *Gráficas* solo aparecen si hay credenciales de Netatmo configuradas.
+### Buscar y ubicar
 
-### Widgets
+- 📍 **El pueblo, no el municipio** (`Nomenclator.swift`): el geocodificador de Apple no pasa del municipio, y en todo el concejo de Llanes devuelve «Llanes». La app lleva dentro un nomenclátor de unos 29.000 núcleos (`Nucleos.tsv`, generado con `Tools/build_nomenclator.py`) y elige el más cercano dentro del municipio que ya resolvió AEMET. En las ciudades grandes manda MapKit, que conoce los barrios (Chamberí, Gràcia, Triana).
+- 🔎 **Buscador instantáneo** (`LocationSearch.swift`): índice en memoria con los municipios de AEMET, las localidades del IPMA y los pueblos del nomenclátor. Responde desde la primera letra y sin red, así que «Niembro» se encuentra igual que «Llanes». Ordena primero lo que empieza por lo escrito, el municipio antes que sus pueblos y el más poblado entre homónimos.
 
-Cuatro widgets en tamaños pequeño, mediano y grande (`AppPersonalWidget`):
+## Widgets
 
-| Widget | Qué muestra |
+| Widget | Tamaños | Qué muestra |
+|---|---|---|
+| **Tiempo** | pequeño, mediano, grande | Temperatura actual, cielo, máxima y mínima, previsión por horas y días, avisos |
+| **Netatmo** | pequeño, mediano, grande | Anillos de temperatura, humedad y presión de tu estación |
+| **Sol·Luna** | pequeño, mediano | Orto, ocaso y fase lunar |
+| **Mareas** | pequeño, mediano | El nivel del mar dibujado como una playa |
+
+- Cada widget se configura desde «Editar widget» (ciudad y fondo, `WidgetConfigIntent`) y al tocarlo abre su sección de la app.
+- Se refrescan solos: descargan sus datos y comparten caché con la app por el App Group `group.Altamirano.AppPersonal`. La app guarda una instantánea por ciudad, así que un widget fijado a cualquier ubicación tiene datos aunque no la abras.
+- Los avisos a WidgetKit van agrupados (`LocationStore.nudgeWidgets`). WidgetKit tiene un cupo diario de recargas: avisar en cada página que pasas lo agotaba, y a partir de ahí los widgets se quedaban congelados.
+
+### Color según la temperatura
+
+Los widgets **Tiempo** y **Netatmo** pueden llevar el verde de la app o un fondo que cambia con la temperatura. La escala de colores se elige en **Ajustes → Widgets**, entre seis:
+
+| Escala | Cómo es |
 |---|---|
-| **Tiempo** | Temperatura actual, predicción y avisos, con fondo coloreado según la temperatura |
-| **Sol·Luna** | Orto/ocaso y fase lunar |
-| **Mareas** | Nivel del mar dibujado como playa (alta = azul, baja = arena) |
-| **Netatmo** | Anillos de temperatura, humedad y presión de tu estación |
+| **Pocas bandas** *(por defecto)* | Siete tramos anchos: ≤0, 1–9, 10–17, 18–25, 26–31, 32–37 y ≥38° |
+| **Mapa clásico** | Morado y azules, cian y verdes; verde claro a 20–24°, amarillo desde 25°, hasta granate |
+| **Blanco en el medio** | Casi blanca a 20–24°, más azul cuanto más frío y más roja cuanto más calor |
+| **Tierra** | Pizarra, salvia, arena, ocre, terracota y siena |
+| **Neón** | Colores muy saturados, de índigo eléctrico a rojo vivo |
+| **Nocturna** | Todos los tramos oscuros; el texto siempre en blanco |
 
-- Configurables desde el propio widget (ciudad, estilo) vía `WidgetConfigIntent`.
-- **Deep links**: cada widget abre la sección correspondiente de la app.
-- Se refrescan solos: descargan sus propios datos y comparten caché con la app a través del App Group `group.Altamirano.AppPersonal`.
-- La app guarda un *snapshot* por ciudad, así que un widget fijado a cualquiera de tus ubicaciones tiene datos sin que la abras por ella. Los avisos a WidgetKit se agrupan (`LocationStore.nudgeWidgets`): WidgetKit tiene un cupo diario de recargas y, pasando páginas, avisar en cada una lo agotaría — y a partir de ahí iOS ignora las siguientes y los widgets se quedan congelados.
+- Todas funcionan como la leyenda de un mapa: **un color fijo por tramo** (de 5° salvo en Pocas bandas) y cambio de golpe al pasar de tramo. No hay mezclas entre colores, que eran las que dejaban tonos sucios como un oliva mostaza a 21–24°.
+- El tramo sale de la temperatura **redondeada**, la misma que enseña el widget.
+- El fondo baja al mismo tono algo más oscuro, calculado en OKLab en lugar de mezclar con negro.
+- El texto se pone en blanco o en azul marino según cuál contraste más con el peor extremo del fondo (`WidgetInk`). En las pantallas de inicio tintadas no hay fondo y el texto sigue en blanco.
+- Los colores están en `TempScale` (`Shared/WidgetShared.swift`) y el cálculo del widget en `TempPalette` (`WidgetTheme.swift`).
 
-### General
+## Otras cosas
 
-- 📍 **El pueblo, no el municipio** (`Nomenclator.swift`): el geocodificador de Apple sólo llega al municipio — en todo el concejo de Llanes devuelve «Llanes», y Posada, Niembro o Barro salen con el mismo nombre. La app lleva embarcado un nomenclátor de ~29.000 núcleos de población (`Nucleos.tsv`, generado por `Tools/build_nomenclator.py`) y busca el más cercano, anclado por código INE al municipio que ya resolvió AEMET. En las ciudades grandes manda MapKit, que sí conoce los distritos (Chamberí, Gràcia, Triana).
-- 🔎 **Buscador instantáneo** (`LocationSearch.swift`): un índice en memoria con los municipios de AEMET, las localidades del IPMA y los pueblos del nomenclátor, con los nombres ya normalizados. Busca desde la primera letra y sin red — se puede escribir «Niembro» y no sólo «Llanes» —, ordenando primero lo que empieza por lo escrito, el municipio antes que sus pueblos y el más poblado entre homónimos. El maestro de AEMET se cachea un mes en disco: antes se pedía por red en la primera tecla y la lista tardaba más de cinco segundos en salir.
-- 🔄 **Refresco en segundo plano** con `BGAppRefreshTask` e intervalo configurable (`BackgroundRefresher`).
-- 🌗 **Modo claro y oscuro** con tintes adaptativos (`Theme.swift`, `WidgetTheme.swift`).
-- 🗣️ **Localizada** en español (idioma base), inglés, gallego, euskera y catalán (`Localizable.xcstrings`).
+- 🔄 Refresco en segundo plano con `BGAppRefreshTask`, frecuente (1 h) o de ahorro (6 h), desde Ajustes (`BackgroundRefresher`).
+- 🌗 Modo claro y oscuro (`Theme.swift`, `WidgetTheme.swift`).
+- 🗣️ En español (idioma base), inglés, gallego, euskera y catalán (`Localizable.xcstrings`).
 - ♿️ Etiquetas de accesibilidad en las vistas principales.
 
 ## Requisitos
 
-- Xcode 26 o superior (modo de lenguaje Swift 6; probado con Xcode 27)
-- iOS 26.5+
-- API key de [AEMET OpenData](https://opendata.aemet.es/) *(opcional: sin ella se usa Open-Meteo)*
-- Cuenta y app registrada en [Netatmo Connect](https://dev.netatmo.com/) *(opcional: solo para las pestañas Actual y Gráficas)*
+- Xcode 26 o posterior; el proyecto está en **Swift 6** y se compila con Xcode 27.
+- iOS 26.5 o posterior.
+- Clave de [AEMET OpenData](https://opendata.aemet.es/) *(opcional: sin ella se usa Open-Meteo)*.
+- App registrada en [Netatmo Connect](https://dev.netatmo.com/) *(opcional: solo para Actual y Gráficas)*.
 
-## Configuración de credenciales (importante)
+## Puesta en marcha
 
-Las credenciales **no se versionan**. El repo incluye una plantilla:
+1. Clona el repo y abre `AppPersonal.xcodeproj`.
+2. Copia la plantilla de credenciales y rellénala, o déjala vacía y mete los valores en Ajustes:
 
-```bash
-# Copia la plantilla y rellena tus valores
-cp Secrets.swift.example AppPersonal/Secrets.swift
-```
+   ```bash
+   cp Secrets.swift.example AppPersonal/Secrets.swift
+   ```
 
-`Secrets.swift` está en `.gitignore` (`**/Secrets.swift`) y nunca se sube. Rellena:
+3. Elige tu *Team* de firma. La app y la extensión de widgets comparten el App Group.
+4. Compila y ejecuta.
 
-| Clave | Descripción |
+`Secrets.swift` está en `.gitignore` (`**/Secrets.swift`) y nunca se sube. Lleva:
+
+| Clave | Qué es |
 |---|---|
-| `aemetApiKey` | API key de AEMET OpenData |
+| `aemetApiKey` | Clave de AEMET OpenData |
 | `netatmoClientId` / `netatmoClientSecret` | Credenciales de tu app en Netatmo Connect |
-| `netatmoRefreshToken` | Refresh token OAuth2 de tu cuenta |
+| `netatmoRefreshToken` | *Refresh token* OAuth2 de tu cuenta |
 | `netatmoDeviceId` | MAC de la estación base (`70:ee:50:…`) |
 | `netatmoModuleExt` | MAC del módulo exterior (`02:00:00:…`) |
 | `netatmoModuleRain` | MAC del módulo de lluvia (`05:00:00:…`) |
-| `netatmoWindId` | ID de estación pública de viento (opcional) |
+| `netatmoWindId` | Estación pública de viento (opcional) |
 
-También puedes introducir estos valores en tiempo de ejecución desde **Ajustes** (se guardan en `UserDefaults`).
+Los módulos de Netatmo también se detectan solos desde Ajustes → Estación principal.
 
-## Estructura del proyecto
+> **Un aviso de compilación, a propósito.** Queda un único *warning*: `MKMapItem.placemark`, obsoleto desde iOS 26. Su sustituto, `MKAddressRepresentations`, sigue sin dar la sublocalidad ni el país ISO en el SDK de iOS 27, y la otra vía (`CLGeocoder`) también está obsoleta. De esos dos datos dependen mostrar «Chamberí» en vez de «Madrid» y decidir si un punto lo sirve AEMET o el IPMA. Está encerrado en `LocationStore.legacyFields(of:)`, la única línea que lo usa.
+
+## Estructura
 
 ```
 AppPersonal/
-├── AppPersonal/                    # Target de la app
-│   ├── AppPersonalApp.swift        # Punto de entrada + deep links
-│   ├── ContentView.swift           # Navegación por pestañas
-│   ├── AemetView.swift             # Pestaña Tiempo: páginas por ubicación y carga
-│   ├── AemetCityView.swift         # Predicción, avisos y estación de UNA ubicación
-│   ├── CityWeather.swift           # Datos meteorológicos de una ubicación (+ caché)
+├── AppPersonal/                    # La app
+│   ├── AppPersonalApp.swift        # Entrada y deep links
+│   ├── ContentView.swift           # Pestañas
+│   ├── AemetView.swift             # Tiempo: páginas por ubicación
+│   ├── AemetCityView.swift         # Predicción, avisos y estación de una ubicación
+│   ├── CityWeather.swift           # Datos de una ubicación, con caché
 │   ├── CosmosView.swift            # Sol·Luna, mareas y eventos
-│   ├── ActualView.swift            # Datos actuales de Netatmo
+│   ├── ActualView.swift            # Netatmo en tiempo real
 │   ├── GraficasView.swift          # Gráficas históricas
-│   ├── SettingsView.swift          # Ajustes / credenciales
+│   ├── SettingsView.swift          # Ajustes, credenciales y colores de los widgets
 │   ├── LocationManagerSheet.swift  # Ciudades seguidas
-│   ├── StationPickerSheet.swift    # Selector de estación AEMET
+│   ├── StationPickerSheet.swift    # Estación AEMET o fuente en Portugal
 │   ├── AEMETService.swift / AEMETAlertsService.swift
-│   ├── IPMAService.swift           # Portugal: previsión, observación y avisos del IPMA
+│   ├── IPMAService.swift
 │   ├── OpenMeteoService.swift / OpenMeteoForecast.swift
 │   ├── NetatmoService.swift / NetatmoModels.swift / NetatmoSnapshotBuilder.swift
 │   ├── SunMoonService.swift / MoonPhasesService.swift
 │   ├── TidesService.swift / AstroEventsService.swift
 │   ├── LocationStore.swift / CurrentLocationService.swift
-│   ├── Nomenclator.swift           # Núcleos de población (pueblos y aldeas)
-│   ├── Nucleos.tsv                 # Nomenclátor embebido (GeoNames, CC BY 4.0)
-│   ├── LocationSearch.swift        # Índice del buscador de localidades
+│   ├── Nomenclator.swift / Nucleos.tsv   # Pueblos y aldeas (GeoNames)
+│   ├── LocationSearch.swift        # Índice del buscador
 │   ├── BackgroundRefresher.swift   # BGAppRefreshTask
 │   ├── AppConfiguration.swift      # Configuración (UserDefaults)
 │   ├── Theme.swift / Models.swift
-│   ├── Localizable.xcstrings       # es · en · gl · eu · ca
-│   └── Secrets.swift               # ⚠️ Local, NO versionado
+│   ├── Localizable.xcstrings
+│   └── Secrets.swift               # Local, no se versiona
 ├── AppPersonalWidget/              # Extensión de widgets
-│   ├── WeatherWidget.swift / SunMoonWidget.swift
-│   ├── TidesWidget.swift / NetatmoWidget.swift
-│   ├── WidgetConfigIntent.swift / WidgetTheme.swift
+│   ├── WeatherWidget.swift / NetatmoWidget.swift
+│   ├── SunMoonWidget.swift / TidesWidget.swift
+│   ├── WidgetConfigIntent.swift    # Ciudad y fondo de cada widget
+│   ├── WidgetTheme.swift           # Colores, TempPalette y WidgetInk
 │   └── Localizable.xcstrings
-├── Shared/                         # Código compartido app ↔ widget
-│   ├── AemetSnapshotBuilder.swift
-│   └── WidgetShared.swift          # App Group y modelos de snapshot
+├── Shared/                         # Compartido app ↔ widget
+│   ├── WidgetShared.swift          # App Group, instantáneas y TempScale
+│   └── AemetSnapshotBuilder.swift
 ├── Tools/
-│   ├── generate_icon.py
-│   └── build_nomenclator.py        # Regenera Nucleos.tsv desde GeoNames
-├── Secrets.swift.example           # Plantilla de credenciales
+│   ├── build_nomenclator.py        # Regenera Nucleos.tsv desde GeoNames
+│   └── generate_icon.py
+├── Secrets.swift.example
 └── AppPersonal.xcodeproj
 ```
 
-## Puesta en marcha
-
-1. Clona el repo y abre `AppPersonal.xcodeproj`.
-2. Crea `Secrets.swift` a partir de la plantilla (ver arriba) **o** deja los valores vacíos e introdúcelos en Ajustes.
-3. Selecciona tu *Team* de firma (app y extensión de widgets comparten el App Group).
-4. Compila y ejecuta.
-
-> **Un aviso de compilación, a propósito.** El proyecto compila con un único *warning*: `MKMapItem.placemark`, deprecado en iOS 26. No tiene arreglo: su sustituto (`MKAddressRepresentations`) no publica ni la *sublocalidad* ni el país ISO, y la ruta clásica al mismo `CLPlacemark` (`CLGeocoder`) está deprecada también, apuntando a la API que ya usamos. De esos dos campos dependen mostrar «Chamberí» en vez de «Madrid» y decidir si un punto lo sirve AEMET o el IPMA. Está encerrado en `LocationStore.legacyFields(of:)`, la única línea de la app que lo toca.
-
 ## Seguridad
 
-- El `access_token` solo vive en memoria; el `refresh_token` se guarda en `UserDefaults` (aceptable para una app personal). Para producción se recomienda **Keychain**.
-- `Secrets.swift` está excluido del control de versiones.
+- El `access_token` de Netatmo solo vive en memoria; el `refresh_token` va en `UserDefaults`, aceptable para una app personal. Para publicarla convendría el Keychain.
+- `Secrets.swift` no se versiona.
 
-## Licencia
+## Créditos y licencia
 
-Proyecto personal de Bruno Altamirano. Datos meteorológicos cortesía de **AEMET**, **IPMA**, **Open-Meteo**, **Netatmo** e **Instituto Hidrográfico de la Marina** (sujetos a sus respectivos términos de uso).
+Proyecto personal de Bruno Altamirano. Datos de **AEMET**, **IPMA**, **Open-Meteo**, **Netatmo** y el **Instituto Hidrográfico de la Marina**, cada uno con sus términos de uso.
 
-Los nombres de núcleos de población proceden de [**GeoNames**](https://www.geonames.org/), bajo licencia [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). La atribución aparece también en Ajustes → Datos. Para regenerar el fichero:
+Los nombres de pueblos y aldeas son de [**GeoNames**](https://www.geonames.org/), bajo [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); la atribución está también en Ajustes → Datos. Para regenerar el fichero:
 
 ```bash
 python3 Tools/build_nomenclator.py

@@ -2,11 +2,15 @@ import SwiftUI
 
 struct SettingsView: View {
     @ObservedObject private var cfg = AppConfiguration.shared
+    /// Lives in the App Group so the widgets read the same value.
+    @AppStorage(WidgetStore.tempScaleKey, store: UserDefaults(suiteName: appGroupID))
+    private var tempScale: TempScale = .default
 
     var body: some View {
         NavigationStack {
             Form {
                 refreshSection
+                widgetSection
                 aemetSection
                 netatmoSection
                 stationSection
@@ -38,6 +42,28 @@ struct SettingsView: View {
     private var refreshBinding: Binding<Int> {
         Binding(get: { cfg.refreshInterval.simplified.rawValue },
                 set: { cfg.refreshIntervalHours = $0 })
+    }
+
+    // MARK: - Widget colours
+
+    private var widgetSection: some View {
+        Section {
+            Picker("Colores", selection: $tempScale) {
+                ForEach(TempScale.allCases) { scale in
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(scale.name)
+                        TempScaleSwatch(scale: scale)
+                    }
+                    .tag(scale)
+                }
+            }
+            .pickerStyle(.navigationLink)
+            .onChange(of: tempScale) { WidgetStore.reload() }
+        } header: {
+            Text("Widgets · Color según la temperatura")
+        } footer: {
+            Text("La escala de colores de los widgets Tiempo y Netatmo cuando su fondo es «Color según la temperatura». Ese fondo se elige en cada widget, desde «Editar widget».")
+        }
     }
 
     // MARK: - Netatmo OAuth credentials
@@ -175,5 +201,22 @@ struct SettingsView: View {
         } header: {
             Text("Datos")
         }
+    }
+}
+
+/// A temperature scale's bands as a row of flat swatches, coldest on the left — the map
+/// legend the widget background steps through.
+private struct TempScaleSwatch: View {
+    let scale: TempScale
+
+    var body: some View {
+        HStack(spacing: 1) {
+            ForEach(Array(scale.colors.enumerated()), id: \.offset) { _, hex in
+                Rectangle().fill(TempScale.swatch(hex))
+            }
+        }
+        .frame(height: 14)
+        .clipShape(RoundedRectangle(cornerRadius: 3))
+        .accessibilityHidden(true)
     }
 }
