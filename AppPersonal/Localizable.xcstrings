@@ -4,6 +4,34 @@
     "" : {
 
     },
+    "Abre la gráfica" : {
+      "localizations" : {
+        "ca" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Obre la gràfica"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opens the chart"
+          }
+        },
+        "eu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Grafikoa irekitzen du"
+          }
+        },
+        "gl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abre a gráfica"
+          }
+        }
+      }
+    },
     "—" : {
 
     },

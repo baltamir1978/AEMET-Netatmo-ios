@@ -15,6 +15,30 @@ struct ChartData {
     let rainyDays: Int?
 }
 
+/// Which Netatmo module a chart reads from. Pressure is measured by the base station,
+/// so it is always an interior chart even though Actual shows it among the exterior tiles.
+enum NetatmoChartSource: Hashable {
+    case exterior, interior
+
+    var title: String { self == .exterior ? "Exterior" : "Interior" }
+
+    /// (measure type, menu label) — the labels double as the detail screen's title.
+    var types: [(String, String)] {
+        switch self {
+        case .exterior:
+            return [("Temperature", "Temperatura ext."),
+                    ("Humidity",    "Humedad ext."),
+                    ("Rain",        "Lluvia")]
+        case .interior:
+            return [("Temperature", "Temperatura"),
+                    ("CO2",         "CO₂"),
+                    ("Humidity",    "Humedad"),
+                    ("Noise",       "Ruido"),
+                    ("Pressure",    "Presión")]
+        }
+    }
+}
+
 // MARK: - View
 
 struct GraficasView: View {
@@ -34,22 +58,6 @@ struct GraficasView: View {
     private var isLandscape: Bool { vSize == .compact }
     private var chartHeight: CGFloat { isLandscape ? 240 : 200 }
 
-    private let periods = [("semana", "Semana"), ("mes", "Mes"), ("meses3", "3 Meses"), ("anio", "Año")]
-
-    private let exteriorTypes = [
-        ("Temperature", "exterior", "Temperatura ext."),
-        ("Humidity",    "exterior", "Humedad ext."),
-        ("Rain",        "lluvia",   "Lluvia"),
-    ]
-
-    private let interiorTypes = [
-        ("Temperature", "interior", "Temperatura"),
-        ("CO2",         "interior", "CO₂"),
-        ("Humidity",    "interior", "Humedad"),
-        ("Noise",       "interior", "Ruido"),
-        ("Pressure",    "interior", "Presión"),
-    ]
-
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -58,7 +66,7 @@ struct GraficasView: View {
                         Label("Configura Netatmo en Ajustes", systemImage: "gearshape")
                             .font(.caption).foregroundStyle(.secondary).padding()
                     }
-                    periodSelector
+                    ChartPeriodSelector(period: $period, compact: isLandscape) { loadBoth() }
                     if isLandscape {
                         HStack(alignment: .top, spacing: 16) {
                             exteriorCard.frame(maxWidth: .infinity)
@@ -82,8 +90,8 @@ struct GraficasView: View {
 
     private var exteriorCard: some View {
         ChartCard(
-            title: "Exterior",
-            typeOptions: exteriorTypes.map { ($0.0, $0.2) },
+            title: NetatmoChartSource.exterior.title,
+            typeOptions: NetatmoChartSource.exterior.types,
             selectedType: $exteriorType,
             chartData: exteriorChart,
             isLoading: loadingExt,
@@ -95,8 +103,8 @@ struct GraficasView: View {
 
     private var interiorCard: some View {
         ChartCard(
-            title: "Interior",
-            typeOptions: interiorTypes.map { ($0.0, $0.2) },
+            title: NetatmoChartSource.interior.title,
+            typeOptions: NetatmoChartSource.interior.types,
             selectedType: $interiorType,
             chartData: interiorChart,
             isLoading: loadingInt,
@@ -104,41 +112,6 @@ struct GraficasView: View {
             chartHeight: chartHeight,
             onTypeChange: { loadInterior() }
         )
-    }
-
-    @ViewBuilder
-    private var periodSelector: some View {
-        if isLandscape {
-            // Compact full-width segmented control to reclaim vertical space.
-            Picker("Periodo", selection: $period) {
-                ForEach(periods, id: \.0) { (key, label) in
-                    Text(LocalizedStringKey(label)).tag(key)
-                }
-            }
-            .pickerStyle(.segmented)
-            .onChange(of: period) { _, _ in loadBoth() }
-        } else {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Periodo")
-                    .font(.caption).fontWeight(.bold).textCase(.uppercase)
-                    .foregroundStyle(.secondary).tracking(1.5)
-                HStack(spacing: 6) {
-                    ForEach(periods, id: \.0) { (key, label) in
-                        Button(LocalizedStringKey(label)) {
-                            period = key
-                            loadBoth()
-                        }
-                        .font(.subheadline).fontWeight(.medium)
-                        .padding(.horizontal, 14).padding(.vertical, 7)
-                        .background(period == key ? AppTheme.green : Color(.systemBackground))
-                        .foregroundStyle(period == key ? .white : .secondary)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(.systemGray4)))
-                    }
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
     }
 
     // MARK: - Loading
@@ -152,51 +125,176 @@ struct GraficasView: View {
     }
 
     private func loadExterior() {
-        let cfg = AppConfiguration.shared
-        let deviceId = cfg.deviceId
-        guard !deviceId.isEmpty else { return }
-
-        let isRain = exteriorType == "Rain"
-        let moduleId = isRain ? cfg.moduleRain : cfg.moduleExterior
-        // Asking the base station for `sum_rain` returns an empty body forever, which used
-        // to look exactly like "no ha llovido". Say what is actually wrong instead.
-        if isRain && moduleId.isEmpty {
-            exteriorChart = nil
-            exteriorError = String(localized: "No hay pluviómetro configurado.")
-            return
-        }
-        let (scale, days) = scaleAndDays(period)
-        // `getmeasure` only accepts `sum_rain` for the rain gauge; `Sum_rain_1/24`
-        // are dashboard_data fields and return an empty body here.
-        let measureType = isRain ? "sum_rain" : exteriorType
-        let dateBegin = dateBeginUnix(days: days)
-
         loadingExt = true
         exteriorError = nil
         Task {
-            do {
-                let resp = isRain
-                    ? try await rainMeasure(deviceId: deviceId, moduleId: moduleId,
-                                            scale: scale, dateBegin: dateBegin)
-                    : try await NetatmoService.shared.getMeasure(
-                        deviceId: deviceId,
-                        moduleId: moduleId.isEmpty ? deviceId : moduleId,
-                        scale: scale,
-                        types: [measureType],
-                        dateBegin: dateBegin)
-                if let apiError = resp.error {
-                    exteriorChart = nil
-                    exteriorError = describe(apiError)
-                } else {
-                    exteriorChart = buildChartData(from: resp, scale: scale, isRain: isRain)
-                    // An empty body is not "no rain": dry intervals still come back as zeros.
-                    if exteriorChart == nil { exteriorError = String(localized: "El módulo no devolvió medidas.") }
-                }
-            } catch {
-                exteriorChart = nil
-                exteriorError = error.localizedDescription
-            }
+            let r = await NetatmoChartLoader.load(.exterior, type: exteriorType, period: period)
+            exteriorChart = r.chart
+            exteriorError = r.error
             loadingExt = false
+        }
+    }
+
+    private func loadInterior() {
+        loadingInt = true
+        interiorError = nil
+        Task {
+            let r = await NetatmoChartLoader.load(.interior, type: interiorType, period: period)
+            interiorChart = r.chart
+            interiorError = r.error
+            loadingInt = false
+        }
+    }
+}
+
+// MARK: - Single-metric chart (pushed from a tile in Actual)
+
+struct MetricChartView: View {
+    let source: NetatmoChartSource
+    let type: String
+
+    @State private var period = "semana"
+    @State private var chart: ChartData?
+    @State private var isLoading = false
+    @State private var errorText: String?
+    @Environment(\.verticalSizeClass) private var vSize
+
+    private var isLandscape: Bool { vSize == .compact }
+
+    private var title: String {
+        source.types.first { $0.0 == type }?.1 ?? source.title
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: isLandscape ? 12 : 20) {
+                ChartPeriodSelector(period: $period, compact: isLandscape) { load() }
+                ChartCard(
+                    title: source.title,
+                    // Only this metric: switching type here would contradict the tile tapped.
+                    typeOptions: [],
+                    selectedType: .constant(type),
+                    chartData: chart,
+                    isLoading: isLoading,
+                    errorText: errorText,
+                    chartHeight: isLandscape ? 240 : 280,
+                    onTypeChange: {}
+                )
+            }
+            .padding(.horizontal)
+            .padding(.vertical, isLandscape ? 8 : 16)
+        }
+        .background(Color(.systemGroupedBackground))
+        .navigationTitle(LocalizedStringKey(title))
+        .navigationBarTitleDisplayMode(.inline)
+        .task { load() }
+    }
+
+    private func load() {
+        isLoading = true
+        errorText = nil
+        Task {
+            let r = await NetatmoChartLoader.load(source, type: type, period: period)
+            chart = r.chart
+            errorText = r.error
+            isLoading = false
+        }
+    }
+}
+
+// MARK: - Period selector
+
+struct ChartPeriodSelector: View {
+    @Binding var period: String
+    /// Landscape: a full-width segmented control to reclaim vertical space.
+    let compact: Bool
+    let onChange: () -> Void
+
+    private let periods = [("semana", "Semana"), ("mes", "Mes"), ("meses3", "3 Meses"), ("anio", "Año")]
+
+    var body: some View {
+        if compact {
+            Picker("Periodo", selection: $period) {
+                ForEach(periods, id: \.0) { (key, label) in
+                    Text(LocalizedStringKey(label)).tag(key)
+                }
+            }
+            .pickerStyle(.segmented)
+            .onChange(of: period) { _, _ in onChange() }
+        } else {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Periodo")
+                    .font(.caption).fontWeight(.bold).textCase(.uppercase)
+                    .foregroundStyle(.secondary).tracking(1.5)
+                HStack(spacing: 6) {
+                    ForEach(periods, id: \.0) { (key, label) in
+                        Button(LocalizedStringKey(label)) {
+                            period = key
+                            onChange()
+                        }
+                        .font(.subheadline).fontWeight(.medium)
+                        // Large type: shrink rather than split "Semana" across two lines.
+                        .lineLimit(1).minimumScaleFactor(0.5)
+                        .padding(.horizontal, 14).padding(.vertical, 7)
+                        .background(period == key ? AppTheme.green : Color(.systemBackground))
+                        .foregroundStyle(period == key ? .white : .secondary)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(.systemGray4)))
+                        .accessibilityAddTraits(period == key ? .isSelected : [])
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+}
+
+// MARK: - Loading
+
+/// `getmeasure` for one chart, shared by Gráficas and the per-tile charts in Actual.
+enum NetatmoChartLoader {
+    static func load(_ source: NetatmoChartSource, type: String,
+                     period: String) async -> (chart: ChartData?, error: String?) {
+        let cfg = AppConfiguration.shared
+        let deviceId = cfg.deviceId
+        guard !deviceId.isEmpty else { return (nil, nil) }
+
+        let isRain = source == .exterior && type == "Rain"
+        let moduleId: String
+        switch source {
+        case .interior:
+            moduleId = deviceId
+        case .exterior:
+            let configured = isRain ? cfg.moduleRain : cfg.moduleExterior
+            // Asking the base station for `sum_rain` returns an empty body forever, which used
+            // to look exactly like "no ha llovido". Say what is actually wrong instead.
+            if isRain && configured.isEmpty {
+                return (nil, String(localized: "No hay pluviómetro configurado."))
+            }
+            moduleId = configured.isEmpty ? deviceId : configured
+        }
+
+        let (scale, days) = scaleAndDays(period)
+        // `getmeasure` only accepts `sum_rain` for the rain gauge; `Sum_rain_1/24`
+        // are dashboard_data fields and return an empty body here.
+        let measureType = isRain ? "sum_rain" : type
+        let dateBegin = dateBeginUnix(days: days)
+
+        do {
+            let resp = isRain
+                ? try await rainMeasure(deviceId: deviceId, moduleId: moduleId,
+                                        scale: scale, dateBegin: dateBegin)
+                : try await NetatmoService.shared.getMeasure(
+                    deviceId: deviceId, moduleId: moduleId, scale: scale,
+                    types: [measureType], dateBegin: dateBegin)
+            if let apiError = resp.error { return (nil, describe(apiError)) }
+            // An empty body is not "no rain": dry intervals still come back as zeros.
+            guard let chart = buildChartData(from: resp, scale: scale, isRain: isRain) else {
+                return (nil, String(localized: "El módulo no devolvió medidas."))
+            }
+            return (chart, nil)
+        } catch {
+            return (nil, error.localizedDescription)
         }
     }
 
@@ -204,8 +302,8 @@ struct GraficasView: View {
     /// includes a `module_id` that no longer belongs to the station — indistinguishable from
     /// a real outage. So: ask in real time first (the only way to see the slot in progress),
     /// then plainly, then with the gauge re-detected from the station itself.
-    private func rainMeasure(deviceId: String, moduleId: String,
-                             scale: String, dateBegin: Int) async throws -> GetMeasureResponse {
+    private static func rainMeasure(deviceId: String, moduleId: String,
+                                    scale: String, dateBegin: Int) async throws -> GetMeasureResponse {
         func ask(_ module: String, realTime: Bool) async throws -> GetMeasureResponse {
             try await NetatmoService.shared.getMeasure(
                 deviceId: deviceId, moduleId: module, scale: scale,
@@ -231,7 +329,7 @@ struct GraficasView: View {
     }
 
     /// The `NAModule3` currently attached to the station, straight from `getstationsdata`.
-    private func detectRainModule(deviceId: String) async -> String? {
+    private static func detectRainModule(deviceId: String) async -> String? {
         guard let resp = try? await NetatmoService.shared.getStationsData() else { return nil }
         let devices = resp.body?.devices ?? []
         let main = devices.first { $0.id == deviceId } ?? devices.first
@@ -240,48 +338,12 @@ struct GraficasView: View {
 
     /// Netatmo's own wording plus its code — "Maximum usage reached" (rate limit) and a
     /// dead module both arrive as generic-sounding text otherwise.
-    private func describe(_ error: NetatmoAPIError) -> String {
+    private static func describe(_ error: NetatmoAPIError) -> String {
         let message = error.message ?? String(localized: "Error de Netatmo")
         return error.code.map { "\(message) (\($0))" } ?? message
     }
 
-    private func loadInterior() {
-        let cfg = AppConfiguration.shared
-        let deviceId = cfg.deviceId
-        guard !deviceId.isEmpty else { return }
-
-        let (scale, days) = scaleAndDays(period)
-        let dateBegin = dateBeginUnix(days: days)
-
-        loadingInt = true
-        interiorError = nil
-        Task {
-            do {
-                let resp = try await NetatmoService.shared.getMeasure(
-                    deviceId: deviceId,
-                    moduleId: deviceId,
-                    scale: scale,
-                    types: [interiorType],
-                    dateBegin: dateBegin
-                )
-                if let apiError = resp.error {
-                    interiorChart = nil
-                    interiorError = describe(apiError)
-                } else {
-                    interiorChart = buildChartData(from: resp, scale: scale, isRain: false)
-                    if interiorChart == nil { interiorError = String(localized: "El módulo no devolvió medidas.") }
-                }
-            } catch {
-                interiorChart = nil
-                interiorError = error.localizedDescription
-            }
-            loadingInt = false
-        }
-    }
-
-    // MARK: - Helpers
-
-    private func scaleAndDays(_ period: String) -> (String, Int) {
+    private static func scaleAndDays(_ period: String) -> (String, Int) {
         switch period {
         case "mes":    return ("1day",   30)
         case "meses3": return ("1day",   90)
@@ -290,11 +352,11 @@ struct GraficasView: View {
         }
     }
 
-    private func dateBeginUnix(days: Int) -> Int {
+    private static func dateBeginUnix(days: Int) -> Int {
         Int(Date().addingTimeInterval(-Double(days) * 86400).timeIntervalSince1970)
     }
 
-    private func buildChartData(from resp: GetMeasureResponse, scale: String, isRain: Bool) -> ChartData? {
+    private static func buildChartData(from resp: GetMeasureResponse, scale: String, isRain: Bool) -> ChartData? {
         guard let body = resp.body, !body.isEmpty else { return nil }
 
         let sorted: [(Int, Double)] = body.compactMap { k, v in
@@ -340,6 +402,7 @@ struct GraficasView: View {
     }
 }
 
+
 // MARK: - Chart Card
 
 struct ChartCard: View {
@@ -351,6 +414,7 @@ struct ChartCard: View {
     var errorText: String? = nil
     var chartHeight: CGFloat = 200
     let onTypeChange: () -> Void
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     private var typeColor: Color {
         switch selectedType {
@@ -389,14 +453,19 @@ struct ChartCard: View {
                     .font(.caption).fontWeight(.bold).textCase(.uppercase)
                     .foregroundStyle(.secondary).tracking(1)
                 Spacer()
-                Picker("", selection: $selectedType) {
-                    ForEach(typeOptions, id: \.0) { (key, label) in
-                        Text(LocalizedStringKey(label)).tag(key)
+                // A single-metric card (opened from a tile) has nothing to choose from.
+                if !typeOptions.isEmpty {
+                    Picker("", selection: $selectedType) {
+                        ForEach(typeOptions, id: \.0) { (key, label) in
+                            Text(LocalizedStringKey(label)).tag(key)
+                        }
                     }
+                    .pickerStyle(.menu)
+                    .onChange(of: selectedType) { _, _ in onTypeChange() }
                 }
-                .pickerStyle(.menu)
-                .onChange(of: selectedType) { _, _ in onTypeChange() }
             }
+            // Same height with or without the menu, so the header doesn't shrink.
+            .frame(minHeight: 32)
             .padding(.horizontal, 16).padding(.vertical, 12)
             Divider()
             if isLoading {
@@ -425,7 +494,8 @@ struct ChartCard: View {
 
     @ViewBuilder
     private func chartBody(data: ChartData) -> some View {
-        let tickStep = max(1, data.labels.count / 8)
+        // Big date labels need room, or they print on top of each other.
+        let tickStep = max(1, data.labels.count / (typeSize.isAccessibilitySize ? 3 : 8))
         let entries = Array(data.values.enumerated())
 
         if selectedType == "Rain" {
@@ -486,7 +556,8 @@ struct ChartCard: View {
                          value: data.rainyDays.map { "\($0)" } ?? "—",
                          date: nil)
             }
-            .frame(height: 60)
+            .frame(minHeight: 60)
+            .fixedSize(horizontal: false, vertical: true)
         } else {
             HStack(spacing: 0) {
                 statItem(label: statFeminine ? "Mínima" : "Mínimo",
@@ -501,7 +572,8 @@ struct ChartCard: View {
                          value: data.max.map { "\(String(format: "%.1f", $0)) \(typeUnit)" } ?? "—",
                          date: data.maxLabel)
             }
-            .frame(height: 60)
+            .frame(minHeight: 60)
+            .fixedSize(horizontal: false, vertical: true)
         }
     }
 

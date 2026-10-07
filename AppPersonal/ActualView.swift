@@ -116,7 +116,7 @@ struct ActualView: View {
     private var exteriorSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             sectionHeader("Exterior", timestamp: station?.lastStatusStore)
-            MetricCardsGrid(values: exteriorValues, batteries: exteriorBatteries)
+            MetricCardsGrid(values: exteriorValues, batteries: exteriorBatteries, source: .exterior)
             if let note = rainNote {
                 Label(LocalizedStringKey(note), systemImage: "exclamationmark.triangle.fill")
                     .font(.caption).foregroundStyle(.secondary)
@@ -141,7 +141,7 @@ struct ActualView: View {
     private var interiorSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             sectionHeader("Interior", timestamp: station?.lastStatusStore)
-            MetricCardsGrid(values: interiorValues, batteries: [:])
+            MetricCardsGrid(values: interiorValues, batteries: [:], source: .interior)
         }
     }
 
@@ -213,6 +213,8 @@ struct MetricCardsGrid: View {
     let values: [String: Double?]
     /// Battery level of the module behind each metric, when it runs on batteries.
     var batteries: [String: Int] = [:]
+    /// The group these tiles belong to, so a tap opens the matching chart.
+    let source: NetatmoChartSource
 
     private let typeMeta: [(key: String, label: String, unit: String, icon: String, color: Color)] = [
         ("Temperature", "Temperatura", "°C",   "thermometer.medium",    .orange),
@@ -232,13 +234,31 @@ struct MetricCardsGrid: View {
         LazyVGrid(columns: columns, spacing: 10) {
             ForEach(typeMeta, id: \.key) { meta in
                 if let val = values[meta.key] {
-                    MetricCard(label: meta.label, unit: meta.unit,
-                               icon: meta.icon, color: meta.color,
-                               value: val, metaKey: meta.key,
-                               battery: batteries[meta.key],
-                               today: meta.key == "sum_rain_1" ? (values["sum_rain_24"] ?? nil) : nil)
+                    let target = chartTarget(meta.key)
+                    NavigationLink {
+                        MetricChartView(source: target.source, type: target.type)
+                    } label: {
+                        MetricCard(label: meta.label, unit: meta.unit,
+                                   icon: meta.icon, color: meta.color,
+                                   value: val, metaKey: meta.key,
+                                   battery: batteries[meta.key],
+                                   today: meta.key == "sum_rain_1" ? (values["sum_rain_24"] ?? nil) : nil)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHint(Text("Abre la gráfica"))
                 }
             }
+        }
+    }
+
+    /// The tile's key is a dashboard field; the chart wants a `getmeasure` type and module.
+    /// Pressure is read on the base station, and the gauge's history is `Rain`, not the
+    /// last-hour sum the tile shows.
+    private func chartTarget(_ key: String) -> (source: NetatmoChartSource, type: String) {
+        switch key {
+        case "Pressure":   return (.interior, "Pressure")
+        case "sum_rain_1": return (.exterior, "Rain")
+        default:           return (source, key)
         }
     }
 }
