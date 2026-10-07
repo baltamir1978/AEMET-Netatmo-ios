@@ -14,3 +14,6 @@ DerivedData/
 
 # macOS
 .DS_Store
+
+# Archivos de TestFlight
+build/
