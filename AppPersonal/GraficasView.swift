@@ -13,6 +13,9 @@ struct ChartData {
     let maxLabel: String?
     let total: Double?
     let rainyDays: Int?
+    /// Indices that get a label on the x axis, with their text — short and sparse, unlike
+    /// `labels` (one per point, for the min/max dates), which would print on top of each other.
+    var axisTicks: [(index: Int, label: String)] = []
 }
 
 /// Which Netatmo module a chart reads from. Pressure is measured by the base station,
@@ -374,6 +377,8 @@ enum NetatmoChartLoader {
         labelFmt.locale = Locale(identifier: "es_ES")
         labelFmt.dateFormat = scale == "3hours" ? "d/M HH'h'" : "d MMM"
         let labels = sorted.map { labelFmt.string(from: Date(timeIntervalSince1970: TimeInterval($0.0))) }
+        let axisTicks = axisTicks(dates: sorted.map { Date(timeIntervalSince1970: TimeInterval($0.0)) },
+                                  scale: scale)
 
         if isRain {
             let total = values.reduce(0, +)
@@ -384,7 +389,7 @@ enum NetatmoChartLoader {
                 labels: labels, values: values, isData: values.map { $0 > 0 },
                 min: nil, max: maxVal,
                 minLabel: nil, maxLabel: maxIdx.map { labels[$0] },
-                total: total, rainyDays: rainyDays
+                total: total, rainyDays: rainyDays, axisTicks: axisTicks
             )
         } else {
             let minVal = values.min()
@@ -396,8 +401,38 @@ enum NetatmoChartLoader {
                 min: minVal, max: maxVal,
                 minLabel: minIdx.map { labels[$0] },
                 maxLabel: maxIdx.map { labels[$0] },
-                total: nil, rainyDays: nil
+                total: nil, rainyDays: nil, axisTicks: axisTicks
             )
+        }
+    }
+
+    /// The week (3-hour points) gets one weekday per day, under the middle of that day; days
+    /// with less than half their points (the first and today) go unlabelled so they don't
+    /// crowd their neighbour. Longer periods get about five dates, counted back from today.
+    private static func axisTicks(dates: [Date], scale: String) -> [(index: Int, label: String)] {
+        guard !dates.isEmpty else { return [] }
+        let fmt = DateFormatter()
+        if scale == "3hours" {
+            fmt.setLocalizedDateFormatFromTemplate("EEE")
+            let cal = Calendar.current
+            var days: [[Int]] = []
+            for (i, d) in dates.enumerated() {
+                if let last = days.last?.last, cal.isDate(dates[last], inSameDayAs: d) {
+                    days[days.count - 1].append(i)
+                } else {
+                    days.append([i])
+                }
+            }
+            return days.filter { $0.count >= 4 }.map { day in
+                let mid = day[day.count / 2]
+                return (mid, fmt.string(from: dates[mid]))
+            }
+        }
+        fmt.setLocalizedDateFormatFromTemplate("dMMM")
+        // A month is labelled weekly so every tick falls on the same weekday as today.
+        let step = dates.count <= 31 ? 7 : Int((Double(dates.count) / 5).rounded(.up))
+        return stride(from: dates.count - 1, through: 0, by: -step).reversed().map {
+            ($0, fmt.string(from: dates[$0]))
         }
     }
 }
@@ -494,8 +529,10 @@ struct ChartCard: View {
 
     @ViewBuilder
     private func chartBody(data: ChartData) -> some View {
-        // Big date labels need room, or they print on top of each other.
-        let tickStep = max(1, data.labels.count / (typeSize.isAccessibilitySize ? 3 : 8))
+        // Big date labels need room: keep every other one.
+        let ticks = typeSize.isAccessibilitySize
+            ? data.axisTicks.enumerated().filter { $0.offset.isMultiple(of: 2) }.map(\.element)
+            : data.axisTicks
         let entries = Array(data.values.enumerated())
 
         if selectedType == "Rain" {
@@ -506,15 +543,7 @@ struct ChartCard: View {
                         .foregroundStyle(active && val > 0 ? typeColor.opacity(0.8) : Color(.systemGray5))
                 }
             }
-            .chartXAxis {
-                AxisMarks(values: Array(stride(from: 0, to: data.labels.count, by: tickStep))) { idx in
-                    AxisValueLabel {
-                        if let i = idx.as(Int.self), i < data.labels.count {
-                            Text(data.labels[i]).font(.caption2)
-                        }
-                    }
-                }
-            }
+            .chartXAxis { xAxis(ticks) }
             .frame(height: chartHeight)
             .padding(.horizontal, 16).padding(.vertical, 12)
         } else {
@@ -526,17 +555,19 @@ struct ChartCard: View {
                         .foregroundStyle(typeColor.opacity(0.1))
                 }
             }
-            .chartXAxis {
-                AxisMarks(values: Array(stride(from: 0, to: data.labels.count, by: tickStep))) { idx in
-                    AxisValueLabel {
-                        if let i = idx.as(Int.self), i < data.labels.count {
-                            Text(data.labels[i]).font(.caption2)
-                        }
-                    }
-                }
-            }
+            .chartXAxis { xAxis(ticks) }
             .frame(height: chartHeight)
             .padding(.horizontal, 16).padding(.vertical, 12)
+        }
+    }
+
+    private func xAxis(_ ticks: [(index: Int, label: String)]) -> some AxisContent {
+        AxisMarks(values: ticks.map(\.index)) { value in
+            AxisValueLabel {
+                if let i = value.as(Int.self), let tick = ticks.first(where: { $0.index == i }) {
+                    Text(tick.label).font(.caption2)
+                }
+            }
         }
     }
 

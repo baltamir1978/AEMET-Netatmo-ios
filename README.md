@@ -26,6 +26,7 @@ App personal de iOS con el tiempo de **AEMET** (y del **IPMA** en Portugal), la 
 
 - 🌡️ Temperatura, humedad, presión, lluvia y viento de tu estación en tiempo real (`NetatmoService`, OAuth2), y **gráficas** históricas (`GraficasView`).
 - Las pestañas *Actual* y *Gráficas* solo aparecen si hay credenciales de Netatmo.
+- Tocar una tarjeta de *Actual* abre la gráfica de esa medida. El eje lleva pocas etiquetas y cortas para que no se monten: en la semana, el día (lun, mar, mié…) bajo el centro de cada uno; en el mes, una fecha por semana contando desde hoy.
 
 ### Buscar y ubicar
 
