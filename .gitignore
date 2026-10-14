@@ -17,3 +17,6 @@ DerivedData/
 
 # Archivos de TestFlight
 build/
+
+# Manifiesto de Xcode Cloud: lo genera Xcode solo y no se usa
+*.xcodeproj/xcshareddata/xcodecloud/
