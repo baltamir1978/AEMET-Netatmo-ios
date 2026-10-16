@@ -25,7 +25,7 @@ enum NetatmoChartSource: Hashable {
 
     var title: String { self == .exterior ? "Exterior" : "Interior" }
 
-    /// (measure type, menu label) — the labels double as the detail screen's title.
+    /// (measure type, label) — the label is the chart screen's title.
     var types: [(String, String)] {
         switch self {
         case .exterior:
@@ -38,114 +38,6 @@ enum NetatmoChartSource: Hashable {
                     ("Humidity",    "Humedad"),
                     ("Noise",       "Ruido"),
                     ("Pressure",    "Presión")]
-        }
-    }
-}
-
-// MARK: - View
-
-struct GraficasView: View {
-    @State private var period = "semana"
-    @State private var exteriorType = "Temperature"
-    @State private var interiorType = "Temperature"
-    @State private var exteriorChart: ChartData?
-    @State private var interiorChart: ChartData?
-    @State private var loadingExt = false
-    @State private var loadingInt = false
-    @State private var exteriorError: String?
-    @State private var interiorError: String?
-    @State private var configError = false
-    @Environment(\.verticalSizeClass) private var vSize
-
-    /// Landscape on iPhone reports a compact height.
-    private var isLandscape: Bool { vSize == .compact }
-    private var chartHeight: CGFloat { isLandscape ? 240 : 200 }
-
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: isLandscape ? 12 : 20) {
-                    if configError {
-                        Label("Configura Netatmo en Ajustes", systemImage: "gearshape")
-                            .font(.caption).foregroundStyle(.secondary).padding()
-                    }
-                    ChartPeriodSelector(period: $period, compact: isLandscape) { loadBoth() }
-                    if isLandscape {
-                        HStack(alignment: .top, spacing: 16) {
-                            exteriorCard.frame(maxWidth: .infinity)
-                            interiorCard.frame(maxWidth: .infinity)
-                        }
-                    } else {
-                        exteriorCard
-                        interiorCard
-                    }
-                }
-                .padding(.horizontal)
-                .padding(.vertical, isLandscape ? 8 : 16)
-            }
-            .navigationTitle("Gráficas")
-            // The bottom tab already says "Gráficas" — hide the bulky title bar in landscape.
-            .navigationBarTitleDisplayMode(isLandscape ? .inline : .large)
-            .toolbar(isLandscape ? .hidden : .automatic, for: .navigationBar)
-            .task { loadBoth() }
-        }
-    }
-
-    private var exteriorCard: some View {
-        ChartCard(
-            title: NetatmoChartSource.exterior.title,
-            typeOptions: NetatmoChartSource.exterior.types,
-            selectedType: $exteriorType,
-            chartData: exteriorChart,
-            isLoading: loadingExt,
-            errorText: exteriorError,
-            chartHeight: chartHeight,
-            onTypeChange: { loadExterior() }
-        )
-    }
-
-    private var interiorCard: some View {
-        ChartCard(
-            title: NetatmoChartSource.interior.title,
-            typeOptions: NetatmoChartSource.interior.types,
-            selectedType: $interiorType,
-            chartData: interiorChart,
-            isLoading: loadingInt,
-            errorText: interiorError,
-            chartHeight: chartHeight,
-            onTypeChange: { loadInterior() }
-        )
-    }
-
-    // MARK: - Loading
-
-    private func loadBoth() {
-        let cfg = AppConfiguration.shared
-        configError = !cfg.isNetatmoConfigured
-        guard !configError else { return }
-        loadExterior()
-        loadInterior()
-    }
-
-    private func loadExterior() {
-        loadingExt = true
-        exteriorError = nil
-        Task {
-            let r = await NetatmoChartLoader.load(.exterior, type: exteriorType, period: period)
-            exteriorChart = r.chart
-            exteriorError = r.error
-            loadingExt = false
-        }
-    }
-
-    private func loadInterior() {
-        loadingInt = true
-        interiorError = nil
-        Task {
-            let r = await NetatmoChartLoader.load(.interior, type: interiorType, period: period)
-            interiorChart = r.chart
-            interiorError = r.error
-            loadingInt = false
         }
     }
 }
@@ -174,14 +66,11 @@ struct MetricChartView: View {
                 ChartPeriodSelector(period: $period, compact: isLandscape) { load() }
                 ChartCard(
                     title: source.title,
-                    // Only this metric: switching type here would contradict the tile tapped.
-                    typeOptions: [],
-                    selectedType: .constant(type),
+                    type: type,
                     chartData: chart,
                     isLoading: isLoading,
                     errorText: errorText,
-                    chartHeight: isLandscape ? 240 : 280,
-                    onTypeChange: {}
+                    chartHeight: isLandscape ? 240 : 280
                 )
             }
             .padding(.horizontal)
@@ -254,7 +143,7 @@ struct ChartPeriodSelector: View {
 
 // MARK: - Loading
 
-/// `getmeasure` for one chart, shared by Gráficas and the per-tile charts in Actual.
+/// `getmeasure` for the chart behind a tile in Actual.
 enum NetatmoChartLoader {
     static func load(_ source: NetatmoChartSource, type: String,
                      period: String) async -> (chart: ChartData?, error: String?) {
@@ -442,17 +331,15 @@ enum NetatmoChartLoader {
 
 struct ChartCard: View {
     let title: String
-    let typeOptions: [(String, String)]
-    @Binding var selectedType: String
+    let type: String
     let chartData: ChartData?
     let isLoading: Bool
     var errorText: String? = nil
     var chartHeight: CGFloat = 200
-    let onTypeChange: () -> Void
     @Environment(\.dynamicTypeSize) private var typeSize
 
     private var typeColor: Color {
-        switch selectedType {
+        switch type {
         case "Temperature": return .orange
         case "Humidity":    return .blue
         case "Pressure":    return AppTheme.green
@@ -466,11 +353,11 @@ struct ChartCard: View {
     /// Whether the selected metric is grammatically feminine (la temperatura/humedad/presión)
     /// so the stat labels read "Máxima/Mínima" instead of "Máximo/Mínimo".
     private var statFeminine: Bool {
-        ["Temperature", "Humidity", "Pressure", "Rain"].contains(selectedType)
+        ["Temperature", "Humidity", "Pressure", "Rain"].contains(type)
     }
 
     private var typeUnit: String {
-        switch selectedType {
+        switch type {
         case "Temperature": return "°C"
         case "Humidity":    return "%"
         case "Pressure":    return "hPa"
@@ -488,18 +375,7 @@ struct ChartCard: View {
                     .font(.caption).fontWeight(.bold).textCase(.uppercase)
                     .foregroundStyle(.secondary).tracking(1)
                 Spacer()
-                // A single-metric card (opened from a tile) has nothing to choose from.
-                if !typeOptions.isEmpty {
-                    Picker("", selection: $selectedType) {
-                        ForEach(typeOptions, id: \.0) { (key, label) in
-                            Text(LocalizedStringKey(label)).tag(key)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    .onChange(of: selectedType) { _, _ in onTypeChange() }
-                }
             }
-            // Same height with or without the menu, so the header doesn't shrink.
             .frame(minHeight: 32)
             .padding(.horizontal, 16).padding(.vertical, 12)
             Divider()
@@ -535,7 +411,7 @@ struct ChartCard: View {
             : data.axisTicks
         let entries = Array(data.values.enumerated())
 
-        if selectedType == "Rain" {
+        if type == "Rain" {
             Chart {
                 ForEach(entries, id: \.offset) { i, val in
                     let active = data.isData?[i] == true
@@ -573,7 +449,7 @@ struct ChartCard: View {
 
     @ViewBuilder
     private func statsRow(data: ChartData) -> some View {
-        if selectedType == "Rain" {
+        if type == "Rain" {
             HStack(spacing: 0) {
                 statItem(label: "Total",
                          value: data.total.map { "\(String(format: "%.1f", $0)) L/m²" } ?? "—",

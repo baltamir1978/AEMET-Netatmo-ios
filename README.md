@@ -24,9 +24,9 @@ App personal de iOS con el tiempo de **AEMET** (y del **IPMA** en Portugal), la 
 
 ### Netatmo (opcional)
 
-- 🌡️ Temperatura, humedad, presión, lluvia y viento de tu estación en tiempo real (`NetatmoService`, OAuth2), y **gráficas** históricas (`GraficasView`).
-- Las pestañas *Actual* y *Gráficas* solo aparecen si hay credenciales de Netatmo.
-- Tocar una tarjeta de *Actual* abre la gráfica de esa medida. El eje lleva pocas etiquetas y cortas para que no se monten: en la semana, el día (lun, mar, mié…) bajo el centro de cada uno; en el mes, una fecha por semana contando desde hoy.
+- 🌡️ Temperatura, humedad, presión, lluvia y viento de tu estación en tiempo real (`NetatmoService`, OAuth2), y **gráficas** históricas (`NetatmoCharts`).
+- La pestaña *Actual* solo aparece si hay credenciales de Netatmo.
+- Tocar una tarjeta de *Actual* abre la gráfica de esa medida (ya no hay pestaña *Gráficas*: era lo mismo). El eje lleva pocas etiquetas y cortas para que no se monten: en la semana, el día (lun, mar, mié…) bajo el centro de cada uno; en el mes, una fecha por semana contando desde hoy.
 
 ### Buscar y ubicar
 
@@ -77,7 +77,7 @@ Los widgets **Tiempo** y **Netatmo** pueden llevar el verde de la app o un fondo
 - Xcode 26 o posterior; el proyecto está en **Swift 6** y se compila con Xcode 27.
 - iOS 26.5 o posterior.
 - Clave de [AEMET OpenData](https://opendata.aemet.es/) *(opcional: sin ella se usa Open-Meteo)*.
-- App registrada en [Netatmo Connect](https://dev.netatmo.com/) *(opcional: solo para Actual y Gráficas)*.
+- App registrada en [Netatmo Connect](https://dev.netatmo.com/) *(opcional: solo para Actual y sus gráficas)*.
 
 ## Puesta en marcha
 
@@ -119,7 +119,7 @@ AppPersonal/
 │   ├── CityWeather.swift           # Datos de una ubicación, con caché
 │   ├── CosmosView.swift            # Sol·Luna, mareas y eventos
 │   ├── ActualView.swift            # Netatmo en tiempo real
-│   ├── GraficasView.swift          # Gráficas históricas
+│   ├── NetatmoCharts.swift         # Gráficas históricas (desde las tarjetas de Actual)
 │   ├── SettingsView.swift          # Ajustes, credenciales y colores de los widgets
 │   ├── LocationManagerSheet.swift  # Ciudades seguidas
 │   ├── StationPickerSheet.swift    # Estación AEMET o fuente en Portugal

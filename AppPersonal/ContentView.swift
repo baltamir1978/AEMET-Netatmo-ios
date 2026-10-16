@@ -7,7 +7,7 @@ struct ContentView: View {
     // Bumped by a tides-widget tap so Sol·Luna scrolls to its Mareas card.
     @State private var tidesScrollSignal = 0
 
-    private enum Tab: Hashable { case aemet, cosmos, actual, graficas, settings }
+    private enum Tab: Hashable { case aemet, cosmos, actual, settings }
 
     var body: some View {
         TabView(selection: $selection) {
@@ -19,15 +19,12 @@ struct ContentView: View {
             CosmosView(scrollToTidesSignal: tidesScrollSignal)
                 .tabItem { Label("Sol·Luna",  systemImage: "moon.stars") }
                 .tag(Tab.cosmos)
-            // Netatmo-dependent tabs only show once credentials are configured,
-            // and sit at the end of the bar.
+            // The Netatmo tab only shows once credentials are configured, and sits at the end
+            // of the bar. Its charts open from its tiles.
             if cfg.isNetatmoConfigured {
                 ActualView()
                     .tabItem { Label("Actual",    systemImage: "thermometer.medium") }
                     .tag(Tab.actual)
-                GraficasView()
-                    .tabItem { Label("Gráficas",  systemImage: "chart.line.uptrend.xyaxis") }
-                    .tag(Tab.graficas)
             }
             SettingsView()
                 .tabItem { Label("Ajustes",   systemImage: "gearshape") }
